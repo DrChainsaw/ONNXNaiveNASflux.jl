@@ -42,7 +42,8 @@ function get_artifact(name, location, ninputs, noutputs)
                 download(outputfile(location, i), outputfile(artifact_dir, i))
             end
         end
-        bind_artifact!(artifacts_toml, name, ahash)
+
+        bind_artifact!(artifacts_toml, name, ahash; force=true)
     end
     return ahash
 end
