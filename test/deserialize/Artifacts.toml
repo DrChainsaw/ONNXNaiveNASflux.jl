@@ -1,0 +1,143 @@
+[test_add]
+git-tree-sha1 = "a3bc2cb1e2ad4b5e43d8d092a8743b8b3d4f4ae0"
+
+[test_add_bcast]
+git-tree-sha1 = "650aef179673661b84f360c73def6f2b438887e4"
+
+[test_averagepool_1d_default]
+git-tree-sha1 = "a26b01894e09f2153080429fe13daf3a33e3bee6"
+
+[test_averagepool_2d_ceil]
+git-tree-sha1 = "2a84410bb444b44512c491145d0fc53da8d0b75f"
+
+[test_averagepool_2d_default]
+git-tree-sha1 = "934ada528350c3b861d8eb99b1fca398c43754d2"
+
+[test_averagepool_2d_pads]
+git-tree-sha1 = "5c00ea706a410c8a63bd7bca4d9d187537c50c3f"
+
+[test_averagepool_2d_strides]
+git-tree-sha1 = "68feca049e7cbddf0ac17e2af94e8d496c58f91b"
+
+[test_averagepool_3d_default]
+git-tree-sha1 = "b49d311b3fe31740170243ae079e5e79a1179ec3"
+
+[test_basic_conv_with_padding]
+git-tree-sha1 = "20802743b13b910c8cb19564bdd29d72149fd99d"
+
+[test_basic_conv_without_padding]
+git-tree-sha1 = "2f9a976b510025c3e01a2a3b04889244632222b9"
+
+[test_batchnorm_epsilon]
+git-tree-sha1 = "9b8f389e2f351da7dcc3f616d1e848fab0e07b32"
+
+[test_batchnorm_example]
+git-tree-sha1 = "ff580e2c89dfcf9c2a52a19d273c50474d92634e"
+
+[test_conv_with_strides_and_asymmetric_padding]
+git-tree-sha1 = "c2b785eacbcf938239d08f380a4be522dd86c71b"
+
+[test_conv_with_strides_no_padding]
+git-tree-sha1 = "8be97aa969ebdbe7599798d511a7790eba0697f2"
+
+[test_conv_with_strides_padding]
+git-tree-sha1 = "41eca620fb09f7d90ec9b875a80388566baadada"
+
+[test_dropout_default]
+git-tree-sha1 = "70fe420142b8d29b708578e4b6f2929e6907cb4c"
+
+[test_dropout_random]
+git-tree-sha1 = "8542be75a4b15b3ce742dfde0c5ef609e46c28a4"
+
+[test_gemm_all_attributes]
+git-tree-sha1 = "a596ce98b4cd3b54ba25a1019abab37de53387ca"
+
+[test_gemm_alpha]
+git-tree-sha1 = "f7cd883b5bff5715adf3d9e3dbee7347e4fa33b9"
+
+[test_gemm_beta]
+git-tree-sha1 = "d86353cbaa5d935d2f5a29034d6e7aad85bf6aa2"
+
+[test_gemm_default_matrix_bias]
+git-tree-sha1 = "4b94a6df1abde15851a68de3ddf8365a53c832e3"
+
+[test_gemm_default_no_bias]
+git-tree-sha1 = "6fe96c81c60a689d48fcb6da6fe0b41085e41984"
+
+[test_gemm_default_scalar_bias]
+git-tree-sha1 = "a3a5bfa038cc9b97cdd695bcadc237f537898d23"
+
+[test_gemm_default_single_elem_vector_bias]
+git-tree-sha1 = "751f313ac89e8248234589837d803390b2fb9e36"
+
+[test_gemm_default_vector_bias]
+git-tree-sha1 = "67e5b350bb1ab7d4febfefb2cb547672541bf98f"
+
+[test_gemm_default_zero_bias]
+git-tree-sha1 = "983e46e624b3371dc79ca7dbcf06a9884de489f5"
+
+[test_gemm_transposeA]
+git-tree-sha1 = "99c85fa7d6e81f63d270e8a690c01b86d85a5a6b"
+
+[test_gemm_transposeB]
+git-tree-sha1 = "e64a4308a0366de4775eef0c42d2c9dcaa4b15bb"
+
+[test_globalaveragepool]
+git-tree-sha1 = "ab4fe680a849c9400261dcd24365c3e8449da525"
+
+[test_globalaveragepool_precomputed]
+git-tree-sha1 = "463e8afad38899f27f90b781515ef1e5aadf78d5"
+
+[test_globalmaxpool_precomputed]
+git-tree-sha1 = "6d72b58370176351d46937ca3df65ba2fd114f04"
+
+[test_maxpool_1d_default]
+git-tree-sha1 = "9b0a2b97518eb68122276b242313529582e4be95"
+
+[test_maxpool_2d_ceil]
+git-tree-sha1 = "97d8f18ab6f0d54b222744e4d5bcfea653fd213c"
+
+[test_maxpool_2d_default]
+git-tree-sha1 = "d9f63fc6d1c7dd7168a7fbffc90865d740d1bf28"
+
+[test_maxpool_2d_dilations]
+git-tree-sha1 = "53bc788e7e7b40c618ae227636bc0c8e66cb057e"
+
+[test_maxpool_2d_pads]
+git-tree-sha1 = "8c42d8427fb32f49f44147883fb48fd5ceeb9ec4"
+
+[test_maxpool_2d_strides]
+git-tree-sha1 = "eb755449c5688ff96ed956bbfc12955ead04f7bb"
+
+[test_maxpool_3d_default]
+git-tree-sha1 = "2205debb68c5adb316b1593d0d06e6a9d6d4be4d"
+
+[test_relu]
+git-tree-sha1 = "b809abaa9877f421ed7259cd57f78623f76bbdcf"
+
+[test_reshape_extended_dims]
+git-tree-sha1 = "a98a655cc661b596cd692572217a587322464625"
+
+[test_reshape_negative_dim]
+git-tree-sha1 = "2887e31e203bc6fd50ada62fe03244b8ccf50fd5"
+
+[test_reshape_negative_extended_dims]
+git-tree-sha1 = "822e4700f56aa037edae27416e345174d17c18f0"
+
+[test_reshape_one_dim]
+git-tree-sha1 = "c01076f3843db66659a2c5176ceb52f80bec63d9"
+
+[test_reshape_reduced_dims]
+git-tree-sha1 = "4aefdae10163539e6b16191f04f3b2a640e2526d"
+
+[test_reshape_reordered_all_dims]
+git-tree-sha1 = "93da80ca8422dd4db6bcf162d8730fd30e29fa5d"
+
+[test_reshape_reordered_last_dims]
+git-tree-sha1 = "d4ceb3e6efc73d1605e909b820ab776a36ad47ec"
+
+[test_reshape_zero_and_negative_dim]
+git-tree-sha1 = "a8f54fe04de7e810a2a4a4dcdcdc0147091f5b79"
+
+[test_reshape_zero_dim]
+git-tree-sha1 = "c3ca3149d2fb024446ca706710931d04174d2f88"
