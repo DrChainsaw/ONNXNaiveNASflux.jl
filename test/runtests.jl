@@ -1,7 +1,6 @@
 using ONNXmutable
 using Test
 
-
 @testset "ONNXmutable.jl" begin
 
     @testset "Deserialize" begin
@@ -10,6 +9,8 @@ using Test
     end
 
     @testset "Serialize" begin
+        import ONNX
+        include("serialize/tensorproto.jl")
         include("serialize/serialize.jl")
     end
 

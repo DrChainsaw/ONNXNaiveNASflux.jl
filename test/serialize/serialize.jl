@@ -1,72 +1,106 @@
-import ONNXmutable: protos, optype, actfuns, fluxlayers
-using NaiveNASflux
-import NaiveNASflux: weights, bias
 
-function serdeser(p, pt, convfun = cfun(pt))
-    iob = PipeBuffer();
-    ONNX.writeproto(iob, p)
-    return convfun(ONNX.readproto(iob, pt))
-end
+@testset "Structure" begin
+    import ONNXmutable: protos, optype, actfuns, fluxlayers
+    using NaiveNASflux
+    import NaiveNASflux: weights, bias
 
-cfun(pt) = ONNX.convert
-cfun(pt::ONNX.Proto.TensorProto) = ONNX.get_array
+    function serdeser(p::T, convfun = cfun(p)) where T
+        iob = PipeBuffer();
+        ONNX.writeproto(iob, p)
+        return convfun(ONNX.readproto(iob, T()))
+    end
 
-@testset "Tensor shape $s" for s in ((1,), (2,), (3,4), (1,2,3), (4,5,6,7))
-    exp = reshape(collect(Float32, 1:prod(s)), s)
-    @show size(exp)
+    cfun(pt) = ONNX.convert
+    cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
+    cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
 
-    tp = ONNX.Proto.TensorProto(exp, "testtensor")
+    @testset "Paramless function $(tc.f)" for tc in (
+        (f=relu, ot="Relu")
+        ,)
 
-    res = serdeser(tp, ONNX.Proto.TensorProto())
+        inname = ["input"]
+        outname = "output"
 
-    @test size(res) == size(exp)
-    @test eltype(res) == eltype(exp)
-    @test res == exp
+        np = protos(tc.f, inname, t -> outname)[1]
+        res = serdeser(np)
 
-end
+        @test res.input == inname
+        @test res.output == [outname]
+        @test res.op_type == tc.ot
+        @test res.name == outname
+    end
 
-@testset "Paramless function $(tc.f)" for tc in (
-    (f=relu, ot="Relu")
-    ,)
+    @testset "Dense layer actfun $af" for af in (
+        relu,
+        )
+        exp = Dense(3,4, af)
 
-    inname = ["input"]
-    outname = "output"
+        inname = ["input"]
 
-    np = protos(tc.f, inname, t -> outname)[1]
-    res = serdeser(np, ONNX.Proto.NodeProto())
+        dp,wp,bp,ap = protos(exp, inname, l -> lowercase(string(typeof(l))))
 
-    @test res.input == inname
-    @test res.output == [outname * "_fwd"]
-    @test res.op_type == tc.ot
-    @test res.name == outname * "_fwd"
+        dn = serdeser(dp)
+        an = serdeser(ap)
+        w = serdeser(wp)
+        b = serdeser(bp)
 
-end
+        @test size(w) == size(weights(exp))
+        @test size(b) == size(bias(exp))
 
-@testset "Dense layer actfun $af" for af in (
-    relu,
-    )
-    exp = Dense(3,4, af)
+        @test w ≈ weights(exp)
+        @test b ≈ bias(exp)
 
-    inname = ["input"]
+        dn.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
+        res = fluxlayers[optype(dn)](dn.attribute, w, b)
 
-    dp,ap,wp,bp = protos(exp, inname, l -> lowercase(string(typeof(l))))
+        @test string(res) == string(exp)
 
-    dn = serdeser(dp, ONNX.Proto.NodeProto())
-    an = serdeser(ap, ONNX.Proto.NodeProto())
-    w = serdeser(wp, ONNX.Proto.TensorProto())
-    b = serdeser(bp, ONNX.Proto.TensorProto())
+        indata = reshape(collect(1:4*nin(res)), :, 4) .- 3
+        @test res(indata) ≈ exp(indata)
+    end
 
-    @test size(w) == size(weights(exp))
-    @test size(b) == size(bias(exp))
+    @testset "Graphs" begin
+        import ONNXmutable: graphproto
 
-    @test w ≈ weights(exp)
-    @test b ≈ bias(exp)
+        dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
+        dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
 
-    dn.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
-    res = fluxlayers[optype(dn)](dn.attribute, w, b)
+        @testset "Linear Dense graph with names" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense1", v0, 4, relu)
+            v2 = dense("dense2", v1, 5, relu)
+            v3 = dense("output", v2, 2)
 
-    @test string(res) == string(exp)
+            g_org = CompGraph(v0, v3)
 
-    indata = reshape(collect(1:4*nin(res)), :, 4) .- 3
-    @test res(indata) ≈ exp(indata)
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes)
+
+            @test name.(vertices(g_org)) == name.(vertices(g_new))
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            @test g_org(indata) ≈ g_new(indata)
+        end
+
+        @testset "Linear Dense graph without names" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense(v0, 4, relu)
+            v2 = dense(v1, 5, relu)
+            v3 = dense(v2, 2)
+
+            g_org = CompGraph(v0, v3)
+
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes)
+
+            @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1", "dense_2"]
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            @test g_org(indata) ≈ g_new(indata)
+        end
+    end
 end

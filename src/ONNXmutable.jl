@@ -9,6 +9,7 @@ using Setfield
 include("deserialize/ops.jl")
 include("deserialize/deserialize.jl")
 
+include("serialize/tensorproto.jl")
 include("serialize/serialize.jl")
 
 end # module

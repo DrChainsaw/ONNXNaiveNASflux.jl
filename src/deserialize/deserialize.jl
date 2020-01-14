@@ -43,7 +43,7 @@ end
 sizes(mp::ONNX.Proto.ModelProto) = sizes(mp.graph)
 sizes(gp::ONNX.Proto.GraphProto) = Dict(name.(gp.input) .=> size.(gp.input))
 
-name(vip::ONNX.Proto.ValueInfoProto) = vip.name
+NaiveNASlib.name(vip::ONNX.Proto.ValueInfoProto) = vip.name
 
 Base.size(vip::ONNX.Proto.ValueInfoProto) = size(vip._type)
 Base.size(tp::ONNX.Proto.TypeProto) = size(tp.tensor_type)
@@ -61,7 +61,7 @@ function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes)
    return CompGraph(gb.inputs, outputs)
 end
 
-name(vi::ONNX.Types.ValueInfo) = vi.name
+NaiveNASlib.name(vi::ONNX.Types.ValueInfo) = vi.name
 #name(n::ONNX.Types.Node) = n.name
 NaiveNASlib.inputs(n::ONNX.Types.Node) = n.input
 NaiveNASlib.outputs(n::ONNX.Types.Node) = n.output
