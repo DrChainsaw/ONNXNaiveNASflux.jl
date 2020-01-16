@@ -126,3 +126,32 @@ function protos(::typeof(relu), innames, lname::AbstractString)
     name=lname,
     op_type="Relu"), )
 end
+
+struct ProtoProbe{S,F,P}
+    name::S
+    nextname::F
+    protos::P
+end
+NaiveNASlib.name(p::ProtoProbe) = p.name
+nextname(p::ProtoProbe, f) = p.nextname
+Base.push!(p::ProtoProbe, n) = push!(p.protos, n)
+newfrom(p::ProtoProbe, outname::String) = ProtoProbe(outname, f -> join([outname, p.nextname], "_"), p.protos)
+Base.Broadcast.broadcastable(p::ProtoProbe) = Ref(p)
+
+function protos(f::Function, innames, bname::AbstractString)
+    protoorder = []
+    probes = ProtoProbe.(innames, bname, [protoorder])
+    f(probes...)
+    return Tuple(protoorder)
+end
+
+function Base.:+(ps::ProtoProbe...)
+    fname = nextname(ps[1], "Add")
+    push!(ps[1], ONNX.Proto.NodeProto(
+        input = collect(name.(ps)),
+        output = [fname],
+        name = fname,
+        op_type = "Add"
+    ))
+    return newfrom(ps[1], fname)
+end

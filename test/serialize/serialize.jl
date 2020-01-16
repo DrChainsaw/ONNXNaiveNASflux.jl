@@ -65,14 +65,7 @@
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
         dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
 
-        @testset "Linear Dense graph with names" begin
-            v0 = inputvertex("input", 3, FluxDense())
-            v1 = dense("dense1", v0, 4, relu)
-            v2 = dense("dense2", v1, 5, relu)
-            v3 = dense("output", v2, 2)
-
-            g_org = CompGraph(v0, v3)
-
+        function test_named_graph(g_org)
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
 
@@ -80,8 +73,18 @@
 
             @test name.(vertices(g_org)) == name.(vertices(g_new))
 
-            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            indata = reshape(collect(Float32, 1:3*4), nout(g_org.inputs[1]), :)
             @test g_org(indata) ≈ g_new(indata)
+            return g_new
+        end
+
+        @testset "Linear Dense graph with names" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense1", v0, 4, relu)
+            v2 = dense("dense2", v1, 5, relu)
+            v3 = dense("output", v2, 2)
+
+            test_named_graph(CompGraph(v0, v3))
         end
 
         @testset "Linear Dense graph without names" begin
@@ -101,6 +104,16 @@
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             @test g_org(indata) ≈ g_new(indata)
+        end
+
+        @testset "Dense graph with add" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense1", v0, 4, relu)
+            v2 = dense("dense2", v0, 4)
+            v3= "add" >> v1 + v2
+            v4 = dense("output", v3, 2, relu)
+
+            test_named_graph(CompGraph(v0, v4))
         end
     end
 end
