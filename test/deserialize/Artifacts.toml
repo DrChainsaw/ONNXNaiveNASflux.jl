@@ -34,6 +34,42 @@ git-tree-sha1 = "9b8f389e2f351da7dcc3f616d1e848fab0e07b32"
 [test_batchnorm_example]
 git-tree-sha1 = "ff580e2c89dfcf9c2a52a19d273c50474d92634e"
 
+[test_concat_1d_axis_0]
+git-tree-sha1 = "b17f9607bf375664ff00a0e2aa4afcedea9c90df"
+
+[test_concat_1d_axis_negative_1]
+git-tree-sha1 = "3f7a402c1be08e0cd27aa607cf0487a0fc5200d1"
+
+[test_concat_2d_axis_0]
+git-tree-sha1 = "dca59fe07aee123f15f3457a9aec92716ec63859"
+
+[test_concat_2d_axis_1]
+git-tree-sha1 = "45b97ee1a6ba976dad75f65eb4b72a017235a3f6"
+
+[test_concat_2d_axis_negative_1]
+git-tree-sha1 = "62762f98956fbcd15b007132311f6529678a347d"
+
+[test_concat_2d_axis_negative_2]
+git-tree-sha1 = "c0076778262f81a6056a38a2e0af609385c0e8a4"
+
+[test_concat_3d_axis_0]
+git-tree-sha1 = "8bd9a98162dc8b20c0d9c046b9697b518f1fb6b3"
+
+[test_concat_3d_axis_1]
+git-tree-sha1 = "36a1a7005591f0c2ea6d61e14b2f9e69ce9fc492"
+
+[test_concat_3d_axis_2]
+git-tree-sha1 = "469c939ca01c2bd68489055b19488810bcfed27b"
+
+[test_concat_3d_axis_negative_1]
+git-tree-sha1 = "93d6efe78f4baec71e4b04f56d7b35f53f769e00"
+
+[test_concat_3d_axis_negative_2]
+git-tree-sha1 = "bd9bb268f3fd3dab55bfc517f237b8217790e718"
+
+[test_concat_3d_axis_negative_3]
+git-tree-sha1 = "969e4d1aabba504ece2627202a8152978df318bf"
+
 [test_conv_with_strides_and_asymmetric_padding]
 git-tree-sha1 = "c2b785eacbcf938239d08f380a4be522dd86c71b"
 

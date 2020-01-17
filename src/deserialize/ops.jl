@@ -60,10 +60,21 @@ invariantops[:Reshape] = function(params, shape)
     end
 end
 
+struct Shape1D <: FluxLayer end
+NaiveNASflux.indim(::Shape1D) = 1
+NaiveNASflux.outdim(::Shape1D) = 1
+NaiveNASflux.actdim(::Shape1D) = 1
+NaiveNASflux.actrank(::Shape1D) = 0
+
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     indims = length(inshape)
+
     if indims == 1
+        return inputvertex(name, inshape[1], Shape1D())
+    end
+
+    if indims == 2
         return inputvertex(name, inshape[1], FluxDense())
     end
     return inputvertex(name, inshape[actdim(indims)], FluxConv{indims-2}())
@@ -73,6 +84,12 @@ verts[:Add] = function(name, inputs, params; conf=VertexConf())
     td = conf.traitdecoration
     nconf = @set conf.traitdecoration = t -> NamedTrait(td(t), name)
     return NaiveNASlib.elemwise(+, nconf, inputs...)
+end
+
+verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, kwargs...)
+    axis = params[:axis]
+    ds = axis >= 0 ? 1 + NaiveNASflux.actrank(inputs[1])[1] - axis : abs(axis)
+    return conc(inputs..., dims=ds, traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
 end
 
 

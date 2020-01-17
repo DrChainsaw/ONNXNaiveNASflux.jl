@@ -26,14 +26,17 @@ end
 nodes(gb::CompGraphBuilder) = keys(gb.allnodes)
 innames(n::ONNX.Types.Node, gb::CompGraphBuilder) = innames(Val(optype(n)), n, gb)
 innames(::Val, n::ONNX.Types.Node, gb::CompGraphBuilder) = inputs(n)[1:1]
-innames(::Val{:Add}, n::ONNX.Types.Node, gb::CompGraphBuilder) = inputs(n)
 innames(::Val{:Input}, ::ONNX.Types.Node, ::CompGraphBuilder) = []
+innames(::Val{:Add}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
+innames(::Val{:Concat}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
 
 innodes(n::ONNX.Types.Node, gb::CompGraphBuilder) = node.(innames(n, gb), gb, n)
 
 Flux.params(n::ONNX.Types.Node, gb::CompGraphBuilder) = params(Val(optype(n)), n, gb)
 Flux.params(::Val, n::ONNX.Types.Node, gb::CompGraphBuilder) = map(pname -> gb.g.initializer[pname], inputs(n)[2:end])
-Flux.params(::Val{:Add}, n::ONNX.Types.Node, gb::CompGraphBuilder) = []
+Flux.params(::Val{:Add}, n::ONNX.Types.Node, ::CompGraphBuilder) = []
+Flux.params(::Val{:Concat}, n::ONNX.Types.Node, ::CompGraphBuilder) = []
+
 
 function extract(modelfile)
    f = readproto(open(modelfile), ONNX.Proto.ModelProto())

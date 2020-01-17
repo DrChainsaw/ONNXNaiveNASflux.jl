@@ -1,6 +1,6 @@
 
 @testset "Structure" begin
-    import ONNXmutable: protos, optype, actfuns, fluxlayers
+    import ONNXmutable: optype, actfuns, fluxlayers
     using NaiveNASflux
     import NaiveNASflux: weights, bias
 
@@ -14,49 +14,70 @@
     cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
     cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
 
-    @testset "Paramless function $(tc.f)" for tc in (
-        (f=relu, ot="Relu")
-        ,)
+    @testset "Nodes" begin
+        import ONNXmutable: AbstractProbe, nextname, newfrom, add!, genname
+        struct NodeProbe{F} <: AbstractProbe
+            name::String
+            namefun::F
+            protos::Vector{Any}
+        end
+        NodeProbe(name, namefun) = NodeProbe(name, namefun, [])
+        ONNXmutable.add!(p::NodeProbe, n) = push!(p.protos, n)
+        ONNXmutable.nextname(p::NodeProbe) = p.namefun
+        ONNXmutable.newfrom(p::NodeProbe, pname) = NodeProbe(pname, p.namefun, p.protos)
+        ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.protos)
+        ONNXmutable.name(p::NodeProbe) = p.name
 
-        inname = ["input"]
-        outname = "output"
+        @testset "Paramless function $(tc.f)" for tc in (
+            (f=relu, ot="Relu")
+            ,)
 
-        np = protos(tc.f, inname, t -> outname)[1]
-        res = serdeser(np)
+            inprobe = NodeProbe("input", f -> "output")
 
-        @test res.input == inname
-        @test res.output == [outname]
-        @test res.op_type == tc.ot
-        @test res.name == outname
-    end
+            outprobe = tc.f(inprobe)
 
-    @testset "Dense layer actfun $af" for af in (
-        relu,
-        )
-        exp = Dense(3,4, af)
+            @test length(outprobe.protos) == 1
 
-        inname = ["input"]
+            res = serdeser(outprobe.protos[])
 
-        dp,wp,bp,ap = protos(exp, inname, l -> lowercase(string(typeof(l))))
+            @test res.input == [name(inprobe)]
+            @test res.output == [name(outprobe)]
+            @test res.op_type == tc.ot
+            @test res.name == name(outprobe)
+        end
 
-        dn = serdeser(dp)
-        an = serdeser(ap)
-        w = serdeser(wp)
-        b = serdeser(bp)
+        @testset "Dense layer actfun $af" for af in (
+            relu,
+            )
+            exp = Dense(3,4, af)
 
-        @test size(w) == size(weights(exp))
-        @test size(b) == size(bias(exp))
+            inprobe = NodeProbe("input", genname)
 
-        @test w ≈ weights(exp)
-        @test b ≈ bias(exp)
+            outprobe = exp(inprobe)
 
-        dn.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
-        res = fluxlayers[optype(dn)](dn.attribute, w, b)
+            @test length(outprobe.protos) == 4
 
-        @test string(res) == string(exp)
+            dp,wp,bp,ap = Tuple(outprobe.protos)
 
-        indata = reshape(collect(1:4*nin(res)), :, 4) .- 3
-        @test res(indata) ≈ exp(indata)
+            dn = serdeser(dp)
+            an = serdeser(ap)
+            w = serdeser(wp)
+            b = serdeser(bp)
+
+            @test size(w) == size(weights(exp))
+            @test size(b) == size(bias(exp))
+
+            @test w ≈ weights(exp)
+            @test b ≈ bias(exp)
+
+            dn.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
+            res = fluxlayers[optype(dn)](dn.attribute, w, b)
+
+            @test string(res) == string(exp)
+
+            indata = reshape(collect(1:4*nin(res)), :, 4) .- 3
+            @test res(indata) ≈ exp(indata)
+        end
     end
 
     @testset "Graphs" begin
@@ -111,6 +132,16 @@
             v1 = dense("dense1", v0, 4, relu)
             v2 = dense("dense2", v0, 4)
             v3= "add" >> v1 + v2
+            v4 = dense("output", v3, 2, relu)
+
+            test_named_graph(CompGraph(v0, v4))
+        end
+
+        @testset "Dense graph with cat" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense1", v0, 4, relu)
+            v2 = dense("dense2", v0, 4)
+            v3= concat("conc", v1, v2)
             v4 = dense("output", v3, 2, relu)
 
             test_named_graph(CompGraph(v0, v4))

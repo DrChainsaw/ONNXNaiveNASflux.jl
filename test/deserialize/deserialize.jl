@@ -98,6 +98,18 @@ end
     (
     (name="test_add", ninputs=2, noutputs=1),
     #(name="test_add_bcast", ninputs=2, noutputs=1) # Op is supported, but we get the wrong idea about what type of inputvertex to create from 3D input
+    (name="test_concat_1d_axis_0", ninputs=2, noutputs=1),
+    (name="test_concat_1d_axis_negative_1", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_0", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_1", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_negative_1", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_negative_2", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_0", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_1", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_2", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_negative_1", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_negative_2", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_negative_3", ninputs=2, noutputs=1),
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
