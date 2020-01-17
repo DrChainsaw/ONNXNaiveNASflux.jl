@@ -46,14 +46,14 @@
             @test res.name == name(outprobe)
         end
 
-        @testset "Dense layer actfun $af" for af in (
-            relu,
+        @testset "$(tc.layer) node" for tc in (
+            (layer=Dense(3,4, relu), indata=reshape(collect(1:12), :, 4) .- 3),
+            (layer=Conv((1,2), 3=>4, relu), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10)
             )
-            exp = Dense(3,4, af)
 
             inprobe = NodeProbe("input", genname)
 
-            outprobe = exp(inprobe)
+            outprobe = tc.layer(inprobe)
 
             @test length(outprobe.protos) == 4
 
@@ -64,19 +64,18 @@
             w = serdeser(wp)
             b = serdeser(bp)
 
-            @test size(w) == size(weights(exp))
-            @test size(b) == size(bias(exp))
+            @test size(w) == size(weights(tc.layer))
+            @test size(b) == size(bias(tc.layer))
 
-            @test w ≈ weights(exp)
-            @test b ≈ bias(exp)
+            @test w ≈ weights(tc.layer)
+            @test b ≈ bias(tc.layer)
 
             dn.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
             res = fluxlayers[optype(dn)](dn.attribute, w, b)
 
-            @test string(res) == string(exp)
+            @test string(res) == string(tc.layer)
 
-            indata = reshape(collect(1:4*nin(res)), :, 4) .- 3
-            @test res(indata) ≈ exp(indata)
+            @test res(tc.indata) ≈ tc.layer(tc.indata)
         end
     end
 
@@ -137,14 +136,52 @@
             test_named_graph(CompGraph(v0, v4))
         end
 
+        @testset "Dense graph with add without names" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense(v0, 4, relu)
+            v2 = dense(v0, 4)
+            v3 = v1 + v2
+
+            g_org = CompGraph(v0, v3)
+
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes)
+
+            @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1", "add_0"]
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            @test g_org(indata) ≈ g_new(indata)
+        end
+
         @testset "Dense graph with cat" begin
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense1", v0, 4, relu)
             v2 = dense("dense2", v0, 4)
-            v3= concat("conc", v1, v2)
+            v3 = concat("conc", v1, v2)
             v4 = dense("output", v3, 2, relu)
 
             test_named_graph(CompGraph(v0, v4))
+        end
+
+        @testset "Dense graph with cat without names" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense(v0, 4, relu)
+            v2 = dense(v0, 4)
+            v3 = concat("conc", v1, v2)
+
+            g_org = CompGraph(v0, v3)
+
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes)
+
+            @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1", "concat_0"]
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            @test g_org(indata) ≈ g_new(indata)
         end
     end
 end

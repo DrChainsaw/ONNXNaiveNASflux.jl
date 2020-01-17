@@ -98,7 +98,13 @@ function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
     return newnamestrat(ppout, nextname(pps[1]))
 end
 
-function (l::Flux.Dense)(pp::AbstractProbe)
+(l::Flux.Dense)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Gemm")
+actfun(::FluxDense, l) = l.σ
+
+(l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv")
+actfun(::FluxConv, l) = l.σ
+
+function protoprobe(lt::FluxParLayer, l, pp, optype)
     lname = recursename(l, nextname(pp))
     wname, bname = lname .* ("_weight", "_bias")
 
@@ -106,10 +112,10 @@ function (l::Flux.Dense)(pp::AbstractProbe)
         input=[name(pp), wname, bname],
         output=[lname],
         name=lname,
-        op_type="Gemm"))
+        op_type=optype))
     add!(pp, ONNX.Proto.TensorProto(weights(l), wname))
     add!(pp, ONNX.Proto.TensorProto(bias(l), bname))
-    return l.σ(newnamestrat(pp, f -> join([lname, lowercase(string(f))], "_"), lname))
+    return actfun(lt, l)(newnamestrat(pp, f -> join([lname, lowercase(string(f))], "_"), lname))
 end
 
 function Flux.relu(pp::AbstractProbe)
@@ -123,7 +129,7 @@ function Flux.relu(pp::AbstractProbe)
 end
 
 function Base.:+(pps::AbstractProbe...)
-    fname = recursename("Add", nextname(pps[1]))
+    fname = recursename("add", nextname(pps[1]))
     add!(pps[1], ONNX.Proto.NodeProto(
         input = collect(name.(pps)),
         output = [fname],
@@ -134,7 +140,7 @@ function Base.:+(pps::AbstractProbe...)
 end
 
 function Base.cat(pps::AbstractProbe...; dims)
-    fname = recursename("Concat", nextname(pps[1]))
+    fname = recursename("concat", nextname(pps[1]))
 
     axis = ONNX.Proto.AttributeProto(
         name="axis",
