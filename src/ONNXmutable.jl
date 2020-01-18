@@ -4,6 +4,7 @@ import ONNX
 import ONNX: readproto, convert, Types, Proto
 using NaiveNASflux
 import NaiveNASflux: weights, bias
+import NaiveNASflux: indim, outdim, actdim, actrank
 using Setfield
 
 include("deserialize/ops.jl")

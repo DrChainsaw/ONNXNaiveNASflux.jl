@@ -96,7 +96,7 @@
             @test name.(vertices(g_org)) == name.(vertices(g_new))
 
             outsize = nout(g_org.inputs[1])
-            bs = 1
+            bs = 4
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
             @test g_org(indata) ≈ g_new(indata)
             return g_new
