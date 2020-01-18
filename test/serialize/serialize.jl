@@ -85,7 +85,9 @@
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
         dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
 
-        function test_named_graph(g_org)
+        convvertex(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Conv((1,1), nout(inpt) => outsize, actfun), inpt)
+
+        function test_named_graph(g_org, extradims = ())
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
 
@@ -93,7 +95,9 @@
 
             @test name.(vertices(g_org)) == name.(vertices(g_new))
 
-            indata = reshape(collect(Float32, 1:3*4), nout(g_org.inputs[1]), :)
+            outsize = nout(g_org.inputs[1])
+            bs = 1
+            indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
             @test g_org(indata) ≈ g_new(indata)
             return g_new
         end
@@ -124,6 +128,15 @@
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             @test g_org(indata) ≈ g_new(indata)
+        end
+
+        @testset "Linear Conv graph with names" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv1", v0, 4, relu)
+            v2 = convvertex("conv2", v1, 5, relu)
+            v3 = convvertex("output", v2, 2)
+
+            test_named_graph(CompGraph(v0, v3), (2,3))
         end
 
         @testset "Dense graph with add" begin
@@ -185,18 +198,18 @@
         end
 
         @testset "Graph two inputs two outputs" begin
-            vins = inputvertex(["in1", "in2"], 3, FluxDense())
+            vins = inputvertex.(["in1", "in2"], 3, Ref(FluxDense()))
             v1 = "add" >> vins[1] + vins[2]
             v2 = concat("conc", vins[1], vins[2])
 
             g_org = CompGraph(vins, [v1, v2])
-            g_new = CompGraph(serdeser(graphproto(g_org)...))
+            g_new = CompGraph(serdeser(graphproto(g_org))...)
 
             @test name.(vertices(g_org)) == name.(vertices(g_new))
 
             indata1 = reshape(collect(Float32, 1:3*4), nout(vins[1]), :)
             indata2 = indata1 .* -0.5
-            @test g_org(indata1, indata2) ≈ g_new(indata1, indata2)
+            @test g_org(indata1, indata2) == g_new(indata1, indata2)
         end
     end
 end
