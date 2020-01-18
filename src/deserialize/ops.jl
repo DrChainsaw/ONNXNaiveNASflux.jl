@@ -46,9 +46,9 @@ fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
 
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
-    return x -> globmeanpool(x, wrap)
+    return x -> globalmeanpool(x, wrap)
 end
-function globmeanpool(x::AbstractArray{T,N}, wrap) where T where N
+function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MeanPool(size(x)[1:N-2])(x))
 end
 

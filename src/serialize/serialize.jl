@@ -98,12 +98,6 @@ function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
     return newnamestrat(ppout, nextname(pps[1]))
 end
 
-(l::Flux.Dense)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Gemm")
-actfun(::FluxDense, l) = l.σ
-
-(l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv")
-actfun(::FluxConv, l) = l.σ
-
 function protoprobe(lt::FluxParLayer, l, pp, optype)
     lname = recursename(l, nextname(pp))
     wname, bname = lname .* ("_weight", "_bias")
@@ -115,29 +109,38 @@ function protoprobe(lt::FluxParLayer, l, pp, optype)
         op_type=optype))
     add!(pp, ONNX.Proto.TensorProto(weights(l), wname))
     add!(pp, ONNX.Proto.TensorProto(bias(l), bname))
-    return actfun(lt, l)(newnamestrat(pp, f -> join([lname, lowercase(string(f))], "_"), lname))
+
+    ppout = actfun(lt, l)(newnamestrat(pp, f -> join([lname, genname(f)], "_"), lname))
+    return newnamestrat(ppout, nextname(pp))
 end
 
-function Flux.relu(pp::AbstractProbe)
-    lname = recursename(relu, nextname(pp))
-    add!(pp, ONNX.Proto.NodeProto(
-    input = [name(pp)],
+(l::Flux.Dense)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Gemm")
+actfun(::FluxDense, l) = l.σ
+
+(l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv")
+actfun(::FluxConv, l) = l.σ
+
+
+function noparfun(optype, pps::AbstractProbe...)
+    lname = recursename(lowercase(optype), nextname(pps[1]))
+    add!(pps[1], ONNX.Proto.NodeProto(
+    input = collect(name.(pps)),
     output = [lname],
     name=lname,
-    op_type="Relu"))
-    return newfrom(pp, lname)
+    op_type= optype))
+    return newfrom(pps[1], lname)
 end
 
-function Base.:+(pps::AbstractProbe...)
-    fname = recursename("add", nextname(pps[1]))
-    add!(pps[1], ONNX.Proto.NodeProto(
-        input = collect(name.(pps)),
-        output = [fname],
-        name = fname,
-        op_type = "Add"
-    ))
-    return newfrom(pps[1], fname)
+Flux.relu(pp::AbstractProbe) = noparfun("Relu", pp)
+
+function globalmeanpool(pp::AbstractProbe, wrap)
+     gpp = noparfun("GlobalAveragePool", pp)
+     ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
+     wpp = wrap(ppnext)
+     return newnamestrat(wpp, nextname(gpp))
 end
+
+Base.:+(pps::AbstractProbe...) = noparfun("Add", pps...)
 
 
 function axisfun(optype, pps::AbstractProbe...; dims, axname="axes")

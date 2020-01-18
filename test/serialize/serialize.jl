@@ -1,6 +1,6 @@
 
 @testset "Structure" begin
-    import ONNXmutable: optype, actfuns, fluxlayers
+    import ONNXmutable: optype, actfuns, fluxlayers, invariantops
     using NaiveNASflux
     import NaiveNASflux: weights, bias
     using Statistics
@@ -29,13 +29,14 @@
         ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.protos)
         ONNXmutable.name(p::NodeProbe) = p.name
 
-        @testset "Paramless function $(tc.f)" for tc in (
-            (f=relu, ot="Relu")
-            ,)
+        @testset "InvariantOp $(tc.op)" for tc in (
+            (op=:Relu, attr = Dict()),
+            (op=:GlobalAveragePool, attr=Dict()),
+            )
 
             inprobe = NodeProbe("input", f -> "output")
 
-            outprobe = tc.f(inprobe)
+            outprobe = invariantops[tc.op](tc.attr)(inprobe)
 
             @test length(outprobe.protos) == 1
 
@@ -43,7 +44,7 @@
 
             @test res.input == [name(inprobe)]
             @test res.output == [name(outprobe)]
-            @test res.op_type == tc.ot
+            @test res.op_type == string(tc.op)
             @test res.name == name(outprobe)
         end
 
@@ -110,6 +111,8 @@
 
         convvertex(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Conv((1,1), nout(inpt) => outsize, actfun), inpt)
 
+        fvertex(name, inpt::AbstractVertex, f) = invariantvertex(f, inpt; traitdecoration = t -> NamedTrait(t, name))
+
         function test_named_graph(g_org, extradims = ())
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
@@ -160,6 +163,16 @@
             v3 = convvertex("output", v2, 2)
 
             test_named_graph(CompGraph(v0, v3), (2,3))
+        end
+
+        @testset "Linear Conv graph with names and global pooling" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv1", v0, 4, relu)
+            v2 = convvertex("conv2", v1, 5, relu)
+            v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v4 = dense("output", v3, 2)
+
+            test_named_graph(CompGraph(v0, v4), (2,3))
         end
 
         @testset "Dense graph with add" begin

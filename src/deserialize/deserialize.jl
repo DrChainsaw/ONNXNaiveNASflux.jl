@@ -88,15 +88,15 @@ function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
    # Case 1: Activation functions
    if optype(n) in keys(actfuns)
       if length(ins) == 1 && optype(ins[1]) in keys(actlayers)
-         ins[1].attribute[:activation] = actfuns[optype(n)](n.attribute)
+         ins[1].attribute[:activation] = actfuns[optype(n)](n.attribute, params(n, gb)...)
          return ins[1], innodes(ins[1], gb)
       end
    end
 
    # Case 2: Global pooling followed by reshape
-   if optype(n) == :GlobalAveragePool
-      if length(ins) == 1 && optype(ins[1]) == :Reshape
-         ins[1].attribute[:wrap] = invariantops[optype(n)](n.attribute)
+   if any(ot -> ot == optype(n), (:Reshape, :Squeeze))
+      if length(ins) == 1 && optype(ins[1]) == :GlobalAveragePool
+         ins[1].attribute[:wrap] = invariantops[optype(n)](n.attribute, params(n, gb)...)
          return ins[1], innodes(ins[1], gb)
       end
    end
