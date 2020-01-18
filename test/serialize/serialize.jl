@@ -48,9 +48,9 @@
         end
 
         @testset "Dims method $(tc.ot)" for tc in (
-            (f=cat, dims=1, ndims=2, ot="Concat"),
-            (f=mean, dims=(2, 3), ndims=4, ot="ReduceMean"),
-            (f=dropdims, dims=(3,), ndims=3, ot="Squeeze")
+            (f=cat, dims=1, ndims=2, ot="Concat", axname=:axis),
+            (f=mean, dims=(2, 3), ndims=4, ot="ReduceMean", axname=:axes),
+            (f=dropdims, dims=(3,), ndims=3, ot="Squeeze", axname=:axes)
             )
             inprobe = NodeProbe("input", f -> "output")
             ONNXmutable.shape(p::NodeProbe) = Tuple(1:tc.ndims)
@@ -66,7 +66,7 @@
             @test res.op_type == tc.ot
             @test res.name == name(outprobe)
             expdims = tc.dims isa Tuple ? collect(tc.dims) : tc.dims
-            @test ONNXmutable.numpy2fluxdim.(res.attribute[:axis], tc.ndims) == expdims
+            @test ONNXmutable.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
         end
 
         @testset "$(tc.layer) node" for tc in (

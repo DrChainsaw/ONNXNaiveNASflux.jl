@@ -15,6 +15,4 @@ using Test
         include("serialize/tensorproto.jl")
         include("serialize/serialize.jl")
     end
-
-
 end

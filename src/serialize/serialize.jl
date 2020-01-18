@@ -140,7 +140,7 @@ function Base.:+(pps::AbstractProbe...)
 end
 
 
-function axisfun(optype, pps::AbstractProbe...; dims)
+function axisfun(optype, pps::AbstractProbe...; dims, axname="axes")
     fname = recursename(lowercase(optype), nextname(pps[1]))
 
     np_axis = flux2numpydim.(dims, ndims_shape(shape(pps[1])))
@@ -149,12 +149,15 @@ function axisfun(optype, pps::AbstractProbe...; dims)
         input = collect(name.(pps)),
         output = [fname],
         name = fname,
-        attribute = [ONNX.Proto.AttributeProto("axis", np_axis)],
+        attribute = [ONNX.Proto.AttributeProto(axname, np_axis)],
         op_type = optype
     ))
     return newfrom(pps[1], fname)
 end
 
-Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims)
-Statistics.mean(pp::AbstractProbe; dims) = axisfun("ReduceMean", pp; dims=dims)
-Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=dims)
+scal2tup(x) = (x,)
+scal2tup(x::Tuple) = x
+
+Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims, axname="axis")
+Statistics.mean(pp::AbstractProbe; dims) = axisfun("ReduceMean", pp; dims=scal2tup(dims))
+Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=scal2tup(dims))

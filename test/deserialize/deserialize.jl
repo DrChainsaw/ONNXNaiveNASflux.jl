@@ -70,6 +70,14 @@ end
     (
     (name="test_globalaveragepool", ninputs=1, noutputs=1),
     (name="test_globalaveragepool_precomputed", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_default_axes_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_default_axes_keepdims_random", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_do_not_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_do_not_keepdims_random", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_keepdims_random", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_negative_axes_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_negative_axes_keepdims_random", ninputs=1, noutputs=1),
     (name="test_reshape_extended_dims", ninputs=2, noutputs=1),
     (name="test_reshape_negative_dim", ninputs=2, noutputs=1),
     (name="test_reshape_negative_extended_dims", ninputs=2, noutputs=1),
@@ -78,19 +86,26 @@ end
     (name="test_reshape_reordered_all_dims", ninputs=2, noutputs=1),
     (name="test_reshape_reordered_last_dims", ninputs=2, noutputs=1),
     (name="test_reshape_zero_and_negative_dim", ninputs=2, noutputs=1),
-    (name="test_reshape_zero_dim", ninputs=2, noutputs=1))
+    (name="test_reshape_zero_dim", ninputs=2, noutputs=1),
+    (name="test_squeeze", ninputs=1, noutputs=1),
+    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1)
+    )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
         @test haskey(invariantops, optype(node))
         op = invariantops[optype(node)](node.attribute, params(node, gb)...)
-        @test op(inputs[1]) ≈ outputs[1]
+        res = op(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        @test cg(inputs[1]) ≈ outputs[1]
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 end
 

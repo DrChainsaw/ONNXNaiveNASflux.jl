@@ -148,6 +148,30 @@ git-tree-sha1 = "eb755449c5688ff96ed956bbfc12955ead04f7bb"
 [test_maxpool_3d_default]
 git-tree-sha1 = "2205debb68c5adb316b1593d0d06e6a9d6d4be4d"
 
+[test_reduce_mean_default_axes_keepdims_example]
+git-tree-sha1 = "8b1b6c99f2d997523cb53efc39c89dbab4b33623"
+
+[test_reduce_mean_default_axes_keepdims_random]
+git-tree-sha1 = "1873549a0ada046c2752c0de1afe89c5c7c51b7d"
+
+[test_reduce_mean_do_not_keepdims_example]
+git-tree-sha1 = "ef3736ae31878815862f8f0cc6287c8982d36882"
+
+[test_reduce_mean_do_not_keepdims_random]
+git-tree-sha1 = "0c5692d345c965d5336e90deb8cfc47e26528ba3"
+
+[test_reduce_mean_keepdims_example]
+git-tree-sha1 = "d50d94bfbf1af77bf6839b3c4d53d01f03b1d1d3"
+
+[test_reduce_mean_keepdims_random]
+git-tree-sha1 = "4dd39779a0599cf5c97904ce9b1b73a5e49d39d4"
+
+[test_reduce_mean_negative_axes_keepdims_example]
+git-tree-sha1 = "7f68350ae6d6e7adf8d6b2d2a6bc62253ad3bd1b"
+
+[test_reduce_mean_negative_axes_keepdims_random]
+git-tree-sha1 = "4c4836cb04caa977f5e4ea94aa1ac79268ca1899"
+
 [test_relu]
 git-tree-sha1 = "b809abaa9877f421ed7259cd57f78623f76bbdcf"
 
@@ -177,3 +201,9 @@ git-tree-sha1 = "a8f54fe04de7e810a2a4a4dcdcdc0147091f5b79"
 
 [test_reshape_zero_dim]
 git-tree-sha1 = "c3ca3149d2fb024446ca706710931d04174d2f88"
+
+[test_squeeze]
+git-tree-sha1 = "458aa7b72548ef30e68311e2ba83fee5232fdcdd"
+
+[test_squeeze_negative_axes]
+git-tree-sha1 = "085e5374680b94e4ac1748a9a944ab67eb933ea5"

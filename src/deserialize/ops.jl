@@ -46,17 +46,54 @@ fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
 
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
-    return function(x::AbstractArray{T,N}) where T where N
-        wrap(MeanPool(size(x)[1:N-2])(x))
-    end
+    return x -> globmeanpool(x, wrap)
+end
+function globmeanpool(x::AbstractArray{T,N}, wrap) where T where N
+    wrap(MeanPool(size(x)[1:N-2])(x))
 end
 
 invariantops[:Reshape] = function(params, shape)
     shape_t = Tuple(reverse(shape))
-    return function(x::AbstractArray{T,N}) where T where N
-        # map 0 to "current size" and -1 to "infer from others", i.e ":"
-        newshape = map(s -> s == 0 ? size(x, actdim(N)) : s < 0 ? Colon() : s, shape_t)
-        return reshape(x, newshape)
+    any(s -> s == 0 || s == -1, shape_t) && return x -> reshape_keepshape(x, shape_t)
+    return x -> reshape(x, shape_t)
+end
+function reshape_keepshape(x, shape)
+    offs = ndims(x) - length(shape)
+    newshape = map(enumerate(shape)) do (ind, new)
+        new == -1 && return Colon()
+        new == 0 && return size(x, ind+offs)
+        return new
+    end
+    return reshape(x, newshape...)
+end
+
+
+invariantops[:Squeeze] = function(params)
+    np_axes = get(params, :axes, missing)
+    dimfun = ismissing(np_axes) ? x -> Tuple(findall(i -> i == 1, size(x))) : x -> Tuple(numpy2fluxdim.(np_axes, ndims(x)))
+    return x -> dropdims(x, dims=dimfun(x))
+end
+
+invariantops[:ReduceMean] = function(params)
+    np_axes = get(params, :axes, missing)
+    keepdims = Bool(get(params, :keepdims, 1))
+
+    dimexp =
+    if keepdims && ismissing(np_axes)
+        # As mean returns a scalar when no dimensions are provided
+        (out, x, dims) -> fill(out, ntuple(i -> 1, ndims(x)))
+    elseif !keepdims
+        (out, x, dims) -> dropdims(out, dims=dims)
+    else
+        (out, x, dims) -> out
+    end
+
+    ismissing(np_axes) && return x -> dimexp(mean(x), x, missing)
+
+    return function(x)
+        dims = Tuple(numpy2fluxdim.(np_axes, ndims(x)))
+        out = mean(x, dims=dims)
+        return dimexp(out, x, dims)
     end
 end
 
@@ -81,9 +118,8 @@ verts[:Add] = function(name, inputs, params; conf=VertexConf())
 end
 
 verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, kwargs...)
-    axis = params[:axis]
-    ds = axis >= 0 ? 1 + NaiveNASflux.actrank(inputs[1])[1] - axis : abs(axis)
-    return conc(inputs..., dims=ds, traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
+    dims = numpy2fluxdim(params[:axis], inputs[1])
+    return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
 end
 
 
