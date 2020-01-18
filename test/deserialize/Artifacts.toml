@@ -85,6 +85,15 @@ git-tree-sha1 = "70fe420142b8d29b708578e4b6f2929e6907cb4c"
 [test_dropout_random]
 git-tree-sha1 = "8542be75a4b15b3ce742dfde0c5ef609e46c28a4"
 
+[test_elu]
+git-tree-sha1 = "3bc7b19717a9b7c11e53f34165111c3ae8de984e"
+
+[test_elu_default]
+git-tree-sha1 = "19caaf6edff423661a9f9d4ef36662347c379246"
+
+[test_elu_example]
+git-tree-sha1 = "b88d134f0df7db13e569658dd27d210b930f650a"
+
 [test_gemm_all_attributes]
 git-tree-sha1 = "a596ce98b4cd3b54ba25a1019abab37de53387ca"
 
@@ -201,6 +210,15 @@ git-tree-sha1 = "a8f54fe04de7e810a2a4a4dcdcdc0147091f5b79"
 
 [test_reshape_zero_dim]
 git-tree-sha1 = "c3ca3149d2fb024446ca706710931d04174d2f88"
+
+[test_selu]
+git-tree-sha1 = "70aa499c68927394657095b917ee030bf88afb59"
+
+[test_selu_default]
+git-tree-sha1 = "44c37442a35def50d4e1230cdcff8a986899d18d"
+
+[test_selu_example]
+git-tree-sha1 = "dc4a6180985e796aca6997ae79137fee6f9c05e9"
 
 [test_squeeze]
 git-tree-sha1 = "458aa7b72548ef30e68311e2ba83fee5232fdcdd"

@@ -55,7 +55,14 @@ end
 
 @testset "Activation functions $(tc.name)" for tc in
     (
-    (name="test_relu", ninputs=1, noutputs=1),)
+    (name="test_elu", ninputs=1, noutputs=1),
+    (name="test_elu_default", ninputs=1, noutputs=1),
+    (name="test_elu_example", ninputs=1, noutputs=1),
+    (name="test_relu", ninputs=1, noutputs=1),
+    (name="test_selu", ninputs=1, noutputs=1), 
+    (name="test_selu_default", ninputs=1, noutputs=1),
+    (name="test_selu_example", ninputs=1, noutputs=1),
+    )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 

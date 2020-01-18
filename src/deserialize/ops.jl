@@ -5,6 +5,18 @@ const invariantops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
 
 actfuns[:Relu] = params -> Flux.relu
+actfuns[:Elu] = function(params)
+    α = get(params, :alpha, 1)
+    return x -> Flux.elu(x, oftype(x, α))
+end
+actfuns[:Selu] = function(params)
+    haskey(params, :alpha) || haskey(params, :gamma) && return Flux.selu
+    γ = get(params, :gamma, Float32(1.05070102214813232421875))
+    α = get(params, :alpha, Float32(1.67326319217681884765625))
+    return x -> selu(x, oftype(x, γ), oftype(x, α))
+end
+Flux.selu(x, γ, α) = γ * ifelse(x > 0, x/1, α * (exp(x) - 1))
+
 
 _akpsd(params) = get(params, :activation, identity), get(params, :kernel_shape, 1), get(params, :pads, 0), get(params, :strides, 1), get(params, :dilations, 1)
 akpsd(params) = a2t.(_akpsd(params))

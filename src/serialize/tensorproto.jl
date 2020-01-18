@@ -29,6 +29,12 @@ ONNX.Proto.AttributeProto(name::String, i::Int64) = ONNX.Proto.AttributeProto(
     i = i
 )
 
+ONNX.Proto.AttributeProto(name::String, f::Float32) = ONNX.Proto.AttributeProto(
+    name=name,
+    _type = ONNX.Proto.AttributeProto_AttributeType.FLOAT,
+    f = f
+)
+
 ONNX.Proto.AttributeProto(name::String, i::NTuple{N, Int64}) where N = ONNX.Proto.AttributeProto(
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.INTS,

@@ -29,8 +29,12 @@
         ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.protos)
         ONNXmutable.name(p::NodeProbe) = p.name
 
-        @testset "InvariantOp $(tc.op)" for tc in (
+        @testset "InvariantOp $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
             (op=:Relu, attr = Dict()),
+            (op=:Elu, attr = Dict()),
+            (op=:Elu, attr = Dict(:alpha => 5f-1)),
+            (op=:Selu, attr = Dict()),
+            (op=:Selu, attr = Dict(:alpha => 15f-1)),
             (op=:GlobalAveragePool, attr=Dict()),
             )
 
@@ -131,7 +135,7 @@
         @testset "Linear Dense graph with names" begin
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense1", v0, 4, relu)
-            v2 = dense("dense2", v1, 5, relu)
+            v2 = dense("dense2", v1, 5, elu)
             v3 = dense("output", v2, 2)
 
             test_named_graph(CompGraph(v0, v3))
@@ -139,7 +143,7 @@
 
         @testset "Linear Dense graph without names" begin
             v0 = inputvertex("input", 3, FluxDense())
-            v1 = dense(v0, 4, relu)
+            v1 = dense(v0, 4, selu)
             v2 = dense(v1, 5, relu)
             v3 = dense(v2, 2)
 
@@ -158,8 +162,8 @@
 
         @testset "Linear Conv graph with names" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
-            v1 = convvertex("conv1", v0, 4, relu)
-            v2 = convvertex("conv2", v1, 5, relu)
+            v1 = convvertex("conv1", v0, 4, selu)
+            v2 = convvertex("conv2", v1, 5, elu)
             v3 = convvertex("output", v2, 2)
 
             test_named_graph(CompGraph(v0, v3), (2,3))
@@ -168,7 +172,7 @@
         @testset "Linear Conv graph with names and global pooling" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv1", v0, 4, relu)
-            v2 = convvertex("conv2", v1, 5, relu)
+            v2 = convvertex("conv2", v1, 5, elu)
             v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
             v4 = dense("output", v3, 2)
 
@@ -180,7 +184,7 @@
             v1 = dense("dense1", v0, 4, relu)
             v2 = dense("dense2", v0, 4)
             v3= "add" >> v1 + v2
-            v4 = dense("output", v3, 2, relu)
+            v4 = dense("output", v3, 2, selu)
 
             test_named_graph(CompGraph(v0, v4))
         end
@@ -206,7 +210,7 @@
 
         @testset "Dense graph with cat" begin
             v0 = inputvertex("input", 3, FluxDense())
-            v1 = dense("dense1", v0, 4, relu)
+            v1 = dense("dense1", v0, 4, elu)
             v2 = dense("dense2", v0, 4)
             v3 = concat("conc", v1, v2)
             v4 = dense("output", v3, 2, relu)

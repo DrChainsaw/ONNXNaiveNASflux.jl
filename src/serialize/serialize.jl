@@ -41,6 +41,8 @@ recursename(f, fname::String) = fname
 
 abstract type AbstractProbe end
 
+Base.oftype(p::AbstractProbe, x) = x
+
 struct ProtoProbe{N,F,P,S} <: AbstractProbe
     name::N
     shape::S
@@ -121,26 +123,30 @@ actfun(::FluxDense, l) = l.σ
 actfun(::FluxConv, l) = l.σ
 
 
-function noparfun(optype, pps::AbstractProbe...)
+function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))
     add!(pps[1], ONNX.Proto.NodeProto(
     input = collect(name.(pps)),
     output = [lname],
     name=lname,
+    attribute = attributes,
     op_type= optype))
     return newfrom(pps[1], lname)
 end
 
-Flux.relu(pp::AbstractProbe) = noparfun("Relu", pp)
+Flux.relu(pp::AbstractProbe) = attribfun("Relu", pp)
+Flux.elu(pp::AbstractProbe, α=1) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
+Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
+Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
 
 function globalmeanpool(pp::AbstractProbe, wrap)
-     gpp = noparfun("GlobalAveragePool", pp)
+     gpp = attribfun("GlobalAveragePool", pp)
      ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
      wpp = wrap(ppnext)
      return newnamestrat(wpp, nextname(gpp))
 end
 
-Base.:+(pps::AbstractProbe...) = noparfun("Add", pps...)
+Base.:+(pps::AbstractProbe...) = attribfun("Add", pps...)
 
 
 function axisfun(optype, pps::AbstractProbe...; dims, axname="axes")
