@@ -60,12 +60,6 @@ invariantops[:Reshape] = function(params, shape)
     end
 end
 
-struct Shape1D <: FluxLayer end
-NaiveNASflux.indim(::Shape1D) = 1
-NaiveNASflux.outdim(::Shape1D) = 1
-NaiveNASflux.actdim(::Shape1D) = 1
-NaiveNASflux.actrank(::Shape1D) = 0
-
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     indims = length(inshape)

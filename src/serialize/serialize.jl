@@ -139,20 +139,22 @@ function Base.:+(pps::AbstractProbe...)
     return newfrom(pps[1], fname)
 end
 
-function Base.cat(pps::AbstractProbe...; dims)
-    fname = recursename("concat", nextname(pps[1]))
 
-    axis = ONNX.Proto.AttributeProto(
-        name="axis",
-        _type = ONNX.Proto.AttributeProto_AttributeType.INT,
-        i = dims
-    )
+function axisfun(optype, pps::AbstractProbe...; dims)
+    fname = recursename(lowercase(optype), nextname(pps[1]))
+
+    np_axis = flux2numpydim.(dims, ndims_shape(shape(pps[1])))
+
     add!(pps[1], ONNX.Proto.NodeProto(
         input = collect(name.(pps)),
         output = [fname],
         name = fname,
-        attribute = [axis],
-        op_type = "Concat"
+        attribute = [ONNX.Proto.AttributeProto("axis", np_axis)],
+        op_type = optype
     ))
     return newfrom(pps[1], fname)
 end
+
+Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims)
+Statistics.mean(pp::AbstractProbe; dims) = axisfun("ReduceMean", pp; dims=dims)
+Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=dims)

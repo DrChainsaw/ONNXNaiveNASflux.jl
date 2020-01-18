@@ -6,6 +6,9 @@ using NaiveNASflux
 import NaiveNASflux: weights, bias
 import NaiveNASflux: indim, outdim, actdim, actrank
 using Setfield
+using Statistics
+
+include("shapes.jl")
 
 include("deserialize/ops.jl")
 include("deserialize/deserialize.jl")

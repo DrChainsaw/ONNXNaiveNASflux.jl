@@ -3,6 +3,7 @@
     import ONNXmutable: optype, actfuns, fluxlayers
     using NaiveNASflux
     import NaiveNASflux: weights, bias
+    using Statistics
 
     function serdeser(p::T, convfun = cfun(p)) where T
         iob = PipeBuffer();
@@ -44,6 +45,28 @@
             @test res.output == [name(outprobe)]
             @test res.op_type == tc.ot
             @test res.name == name(outprobe)
+        end
+
+        @testset "Dims method $(tc.ot)" for tc in (
+            (f=cat, dims=1, ndims=2, ot="Concat"),
+            (f=mean, dims=(2, 3), ndims=4, ot="ReduceMean"),
+            (f=dropdims, dims=(3,), ndims=3, ot="Squeeze")
+            )
+            inprobe = NodeProbe("input", f -> "output")
+            ONNXmutable.shape(p::NodeProbe) = Tuple(1:tc.ndims)
+
+            outprobe = tc.f(inprobe, dims=tc.dims)
+
+            @test length(outprobe.protos) == 1
+
+            res = serdeser(outprobe.protos[])
+
+            @test res.input == [name(inprobe)]
+            @test res.output == [name(outprobe)]
+            @test res.op_type == tc.ot
+            @test res.name == name(outprobe)
+            expdims = tc.dims isa Tuple ? collect(tc.dims) : tc.dims
+            @test ONNXmutable.numpy2fluxdim.(res.attribute[:axis], tc.ndims) == expdims
         end
 
         @testset "$(tc.layer) node" for tc in (
