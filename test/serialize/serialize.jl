@@ -183,5 +183,20 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             @test g_org(indata) ≈ g_new(indata)
         end
+
+        @testset "Graph two inputs two outputs" begin
+            vins = inputvertex(["in1", "in2"], 3, FluxDense())
+            v1 = "add" >> vins[1] + vins[2]
+            v2 = concat("conc", vins[1], vins[2])
+
+            g_org = CompGraph(vins, [v1, v2])
+            g_new = CompGraph(serdeser(graphproto(g_org)...))
+
+            @test name.(vertices(g_org)) == name.(vertices(g_new))
+
+            indata1 = reshape(collect(Float32, 1:3*4), nout(vins[1]), :)
+            indata2 = indata1 .* -0.5
+            @test g_org(indata1, indata2) ≈ g_new(indata1, indata2)
+        end
     end
 end
