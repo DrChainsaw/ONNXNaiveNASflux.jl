@@ -10,7 +10,9 @@ using Statistics
 
 include("shapes.jl")
 
+
 include("deserialize/ops.jl")
+include("deserialize/graphbuilder.jl")
 include("deserialize/deserialize.jl")
 
 include("serialize/namingutil.jl")
