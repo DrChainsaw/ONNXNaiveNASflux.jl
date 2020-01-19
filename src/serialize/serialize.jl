@@ -122,6 +122,25 @@ actfun(::FluxDense, l) = l.σ
 (l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv")
 actfun(::FluxConv, l) = l.σ
 
+function(l::Flux.BatchNorm)(pp::AbstractProbe)
+    lname = recursename(l, nextname(pp))
+    γname, βname, μname, σ²name = lname .* ("_scale", "_bias", "_mean", "_var")
+
+    add!(pp, ONNX.Proto.NodeProto(
+        input=[name(pp), γname, βname, μname, σ²name],
+        output=[lname],
+        name=lname,
+        attribute = ONNX.Proto.AttributeProto.(["epsilon", "momentum"], [l.ϵ, l.momentum]),
+        op_type="BatchNormalization"))
+    add!(pp, ONNX.Proto.TensorProto(l.γ, γname))
+    add!(pp, ONNX.Proto.TensorProto(l.β, βname))
+    add!(pp, ONNX.Proto.TensorProto(l.μ, μname))
+    add!(pp, ONNX.Proto.TensorProto(l.σ², σ²name))
+
+    ppout = actfun(layertype(l), l)(newnamestrat(pp, f -> join([lname, genname(f)], "_"), lname))
+    return newnamestrat(ppout, nextname(pp))
+end
+actfun(::FluxBatchNorm, l) = l.λ
 
 function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))

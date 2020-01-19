@@ -76,7 +76,7 @@
 
         @testset "$(tc.layer) node" for tc in (
             (layer=Dense(3,4, relu), indata=reshape(collect(1:12), :, 4) .- 3),
-            (layer=Conv((1,2), 3=>4, relu), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10)
+            (layer=Conv((1,2), 3=>4, relu), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)
@@ -85,9 +85,9 @@
 
             @test length(outprobe.protos) == 4
 
-            dp,wp,bp,ap = Tuple(outprobe.protos)
+            lp,wp,bp,ap = Tuple(outprobe.protos)
 
-            dn = serdeser(dp)
+            ln = serdeser(lp)
             an = serdeser(ap)
             w = serdeser(wp)
             b = serdeser(bp)
@@ -98,8 +98,36 @@
             @test w ≈ weights(tc.layer)
             @test b ≈ bias(tc.layer)
 
-            dn.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
-            res = fluxlayers[optype(dn)](dn.attribute, w, b)
+            ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
+            res = fluxlayers[optype(ln)](ln.attribute, w, b)
+
+            @test string(res) == string(tc.layer)
+
+            @test res(tc.indata) ≈ tc.layer(tc.indata)
+        end
+
+        @testset "$(tc.layer) node" for tc in (
+            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
+            )
+
+            inprobe = NodeProbe("input", genname)
+            outprobe = tc.layer(inprobe)
+            @test length(outprobe.protos) == 6
+
+            ln, γ, β, μ, σ², an = Tuple(serdeser.(outprobe.protos))
+
+            @test size(β) == size(tc.layer.β)
+            @test size(γ) == size(tc.layer.γ)
+            @test size(μ) == size(tc.layer.μ)
+            @test size(σ²) == size(tc.layer.σ²)
+
+            @test β ≈ tc.layer.β
+            @test γ ≈ tc.layer.γ
+            @test μ ≈ tc.layer.μ
+            @test σ² ≈ tc.layer.σ²
+
+            ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
+            res = fluxlayers[optype(ln)](ln.attribute, γ, β, μ, σ²)
 
             @test string(res) == string(tc.layer)
 
@@ -114,6 +142,8 @@
         dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
 
         convvertex(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Conv((1,1), nout(inpt) => outsize, actfun), inpt)
+
+        bnvertex(name, inpt::AbstractVertex, actfun=identity) = mutable(name, BatchNorm(nout(inpt), actfun), inpt)
 
         fvertex(name, inpt::AbstractVertex, f) = invariantvertex(f, inpt; traitdecoration = t -> NamedTrait(t, name))
 
@@ -132,7 +162,7 @@
             return g_new
         end
 
-        @testset "Linear Dense graph with names" begin
+        @testset "Linear Dense graph" begin
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense1", v0, 4, relu)
             v2 = dense("dense2", v1, 5, elu)
@@ -160,7 +190,7 @@
             @test g_org(indata) ≈ g_new(indata)
         end
 
-        @testset "Linear Conv graph with names" begin
+        @testset "Linear Conv graph" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv1", v0, 4, selu)
             v2 = convvertex("conv2", v1, 5, elu)
@@ -169,7 +199,17 @@
             test_named_graph(CompGraph(v0, v3), (2,3))
         end
 
-        @testset "Linear Conv graph with names and global pooling" begin
+        @testset "Linear Conv graph with global pooling" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv1", v0, 4, relu)
+            v2 = bnvertex("batchnorm1", v1, elu)
+            v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v4 = dense("output", v3, 2, selu)
+
+            test_named_graph(CompGraph(v0, v4), (2,3))
+        end
+
+        @testset "Linear Batchnorm and Conv graph with global pooling" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv1", v0, 4, relu)
             v2 = convvertex("conv2", v1, 5, elu)
@@ -216,6 +256,17 @@
             v4 = dense("output", v3, 2, relu)
 
             test_named_graph(CompGraph(v0, v4))
+        end
+
+        @testset "Conv and batchnorm graph with cat" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv", v0, 2, elu)
+            v2 = bnvertex("batchnorm", v0)
+            v3 = concat("conc", v1, v2)
+            v4 = fvertex("globmeanpool", v3, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v5 = dense("output", v4, 2, relu)
+
+            test_named_graph(CompGraph(v0, v5), (2,3))
         end
 
         @testset "Dense graph with cat without names" begin
