@@ -29,18 +29,19 @@
         ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.protos)
         ONNXmutable.name(p::NodeProbe) = p.name
 
-        @testset "InvariantOp $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
-            (op=:Relu, attr = Dict()),
-            (op=:Elu, attr = Dict()),
-            (op=:Elu, attr = Dict(:alpha => 5f-1)),
-            (op=:Selu, attr = Dict()),
-            (op=:Selu, attr = Dict(:alpha => 15f-1)),
-            (op=:GlobalAveragePool, attr=Dict()),
+        @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
+            (op=:Relu, attr = Dict(), fd=invariantops),
+            (op=:Elu, attr = Dict(), fd=invariantops),
+            (op=:Elu, attr = Dict(:alpha => 5f-1), fd=invariantops),
+            (op=:Selu, attr = Dict(), fd=invariantops),
+            (op=:Selu, attr = Dict(:alpha => 15f-1), fd=invariantops),
+            (op=:GlobalAveragePool, attr=Dict(), fd=invariantops),
+            (op=:MaxPool, attr=Dict(:kernel_shape=>(1,2), :pads=>(2,1), :strides=>(2,2)), fd=fluxlayers)
             )
 
             inprobe = NodeProbe("input", f -> "output")
 
-            outprobe = invariantops[tc.op](tc.attr)(inprobe)
+            outprobe = tc.fd[tc.op](tc.attr)(inprobe)
 
             @test length(outprobe.protos) == 1
 
@@ -50,6 +51,12 @@
             @test res.output == [name(outprobe)]
             @test res.op_type == string(tc.op)
             @test res.name == name(outprobe)
+
+            for (k,v) in tc.attr
+                for (exp, act) in zip(v, res.attribute[k])
+                    @test exp == act
+                end
+            end
         end
 
         @testset "Dims method $(tc.ot)" for tc in (
@@ -145,6 +152,8 @@
 
         bnvertex(name, inpt::AbstractVertex, actfun=identity) = mutable(name, BatchNorm(nout(inpt), actfun), inpt)
 
+        mpvertex(name, inpt::AbstractVertex) = mutable(name, MaxPool((2,2); pad=(1,0), stride=(1,2)), inpt)
+
         fvertex(name, inpt::AbstractVertex, f) = invariantvertex(f, inpt; traitdecoration = t -> NamedTrait(t, name))
 
         function test_named_graph(g_org, extradims = ())
@@ -202,19 +211,29 @@
         @testset "Linear Conv graph with global pooling" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv1", v0, 4, relu)
-            v2 = bnvertex("batchnorm1", v1, elu)
+            v2 = convvertex("conv2", v1, 5, elu)
             v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-            v4 = dense("output", v3, 2, selu)
+            v4 = dense("output", v3, 2)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
         end
 
         @testset "Linear Batchnorm and Conv graph with global pooling" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
-            v1 = convvertex("conv1", v0, 4, relu)
-            v2 = convvertex("conv2", v1, 5, elu)
+            v1 = convvertex("conv", v0, 4, relu)
+            v2 = bnvertex("batchnorm", v1, elu)
             v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-            v4 = dense("output", v3, 2)
+            v4 = dense("output", v3, 2, selu)
+
+            test_named_graph(CompGraph(v0, v4), (4,6))
+        end
+
+        @testset "Linear Conv and MaxPool graph with global pooling" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv", v0, 4, relu)
+            v2 = mpvertex("maxpool", v1)
+            v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v4 = dense("output", v3, 2, selu)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
         end

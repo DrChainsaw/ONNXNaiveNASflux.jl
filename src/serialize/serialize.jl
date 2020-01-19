@@ -157,6 +157,8 @@ Flux.relu(pp::AbstractProbe) = attribfun("Relu", pp)
 Flux.elu(pp::AbstractProbe, α=1) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
 Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
+(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
+
 
 function globalmeanpool(pp::AbstractProbe, wrap)
      gpp = attribfun("GlobalAveragePool", pp)
