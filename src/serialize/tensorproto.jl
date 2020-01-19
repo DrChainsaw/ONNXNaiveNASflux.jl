@@ -6,16 +6,14 @@ ONNX.Proto.ValueInfoProto(
     _type=ONNX.Proto.TypeProto(
         tensor_type=ONNX.Proto.TypeProto_Tensor(
             shape=ONNX.Proto.TensorShapeProto(
-                dim=[tsp_d(), Iterators.flatten((tsp_d(s) for s in inshape))...]
+                dim=[tsp_d(s) for s in inshape]
             )
         )
     )
 )
 
-tsp_d() = ONNX.Proto.TensorShapeProto_Dimension()
-tsp_d(n::Integer) = (ONNX.Proto.TensorShapeProto_Dimension(dim_value=n),)
-tsp_d(l::FluxLayer) = (tsp_d() for i in 1:NaiveNASflux.actrank(l)-1)
-tsp_d(l::FluxRecurrent) = (tsp_d(),) # Flux uses a sequence of 2D input to recurrent layers
+tsp_d(::Missing) = ONNX.Proto.TensorShapeProto_Dimension()
+tsp_d(n::Integer) = ONNX.Proto.TensorShapeProto_Dimension(dim_value=n)
 
 ONNX.Proto.TensorProto(t::AbstractArray{Float32,N}, name ="") where N = ONNX.Proto.TensorProto(
     dims=collect(reverse(size(t))),

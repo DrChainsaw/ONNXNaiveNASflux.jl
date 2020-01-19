@@ -12,5 +12,21 @@ numpy2fluxdim(np_axis, ndims) = np_axis >= 0 ? ndims - np_axis : abs(np_axis)
 
 flux2numpydim(dim, ndims) = ndims - dim
 
-ndims_shape(shape::Tuple{<:Integer, <:FluxLayer}) = 1 + NaiveNASflux.actrank(shape[2])
-ndims_shape(shape::NTuple{N, <:Integer}) where N = N
+function shape(v::AbstractVertex)
+    outshape = shape(layertype(v), nout(v))
+    ismissing(outshape) && return first(unique(shape.(inputs(v))))
+    return outshape
+end
+shape(::FluxLayer, outsize) = missing
+shape(::FluxDense, outsize) = (outsize, missing)
+shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
+shape(::FluxRecurrent, outsize) = (missing, outsize, missing)
+
+rmdims(t::Tuple, dim::Integer) = t[1:end .!= dim]
+rmdims(t::Tuple, dims) = Tuple(t[i] for i in 1:length(t) if i ∉ dims)
+
+function guess_layertype(ndims)
+    ndims <= 1 && return Shape1D()
+    ndims == 2 && return FluxDense()
+    return FluxConv{ndims-2}()
+end

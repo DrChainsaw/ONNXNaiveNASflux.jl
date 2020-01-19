@@ -27,14 +27,17 @@
 
     end
 
-    @testset "ValueInfo shape $s" for s in (FluxDense(), FluxConv{1}(), FluxConv{2}(), FluxConv{3}())
+    @testset "ValueInfo shape $s" for s in ((), (missing,), (1, 2), (3,4,missing))
 
-        tp = ONNX.Proto.ValueInfoProto("test", (3, s))
+        tp = ONNX.Proto.ValueInfoProto("test", s)
 
         name,vsize = serdeser(tp)
 
         @test name == "test"
-        @test length(vsize) == 1 + actrank(s)
-        @test vsize[end-1] == 3
+        @test length(vsize) == length(s)
+
+        if !isempty(s)
+            @test vsize[findall(!ismissing, reverse(s))] == reverse(Tuple(skipmissing(s)))
+        end
     end
 end

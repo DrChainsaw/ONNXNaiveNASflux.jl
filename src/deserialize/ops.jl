@@ -112,15 +112,7 @@ end
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     indims = length(inshape)
-
-    if indims == 1
-        return inputvertex(name, inshape[1], Shape1D())
-    end
-
-    if indims == 2
-        return inputvertex(name, inshape[1], FluxDense())
-    end
-    return inputvertex(name, inshape[actdim(indims)], FluxConv{indims-2}())
+    return inputvertex(name, inshape[max(1, actdim(indims))], guess_layertype(indims))
 end
 
 verts[:Add] = function(name, inputs, params; conf=VertexConf())

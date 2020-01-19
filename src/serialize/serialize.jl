@@ -1,48 +1,22 @@
 
-function default_namestrat(vs::AbstractVector{<:AbstractVertex})
-    all(isnamed, vs) && return v -> name(v)
-    namegen = name_runningnr()
-    ng(v::AbstractVertex) = namegen
-    ng(f) = namegen(f)
-    return ng
-end
+"""
+    AbstractProbe
 
-isnamed(v::AbstractVertex) = isnamed(base(v))
-isnamed(v::CompVertex) = false
-isnamed(v::InputVertex) = true
-isnamed(v::MutationVertex) = isnamed(trait(v))
-isnamed(t::DecoratingTrait) = isnamed(base(t))
-isnamed(t) = false
-isnamed(::NamedTrait) = true
+Abstract base class for probes used for serialization.
 
-function name_runningnr(namefun = genname)
-    exists = Set{String}()
-
-    return function(f)
-        bname = genname(f)
-        next = 0
-        candname = bname * "_" * string(next)
-        while candname in exists
-            next += 1
-            candname = bname * "_" * string(next)
-        end
-        push!(exists, candname)
-        return candname
-    end
-end
-
-genname(v::AbstractVertex) = name(v)
-genname(f::F) where F = lowercase(string(F.name))
-genname(s::AbstractString) = s
-genname(f::Function) = lowercase(string(f))
-
-recursename(f, namestrat) = recursename(f, namestrat(f))
-recursename(f, fname::String) = fname
-
+Idea is that probe will "record" all seen operations based on how methods for those operations on the probe is defined.
+"""
 abstract type AbstractProbe end
 
+# Called by several activation functions
 Base.oftype(p::AbstractProbe, x) = x
 
+"""
+    ProtoProbe <: AbstractProbe
+    ProtoProbe(name, shape, nextname, graph)
+
+Probe which builds an [`ONNX.Proto.GraphProto`](@ref) from seen operations.
+"""
 struct ProtoProbe{N,F,P,S} <: AbstractProbe
     name::N
     shape::S
@@ -60,9 +34,22 @@ function inputprotoprobe!(gp, name, shape, namestrat)
     pp = ProtoProbe(name, shape, namestrat, gp)
 end
 
+"""
+    newnamestrat(p::ProtoProbe, f, pname=p.name)
+
+Return a new `ProtoProbe` from `p` with `nextname = f` and name `pname`.
+"""
 newnamestrat(p::ProtoProbe, f, pname=p.name) = ProtoProbe(pname, p.shape, f, p.graph)
-newfrom(p::ProtoProbe, outname::String, f=nothing) = ProtoProbe(outname, nextshape(p, f), p.nextname, p.graph)
-nextshape(p, f) = p.shape
+
+"""
+    newfrom(p::ProtoProbe, outname::AbstractString, fshape=identity)
+
+Return a new `ProtoProbe` with name `outname`. Argument `fshape` can be used to determine a new shape.
+"""
+newfrom(p::ProtoProbe, outname::AbstractString, fshape=identity) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
+
+nextshape(p::AbstractProbe, f::Function) = f(shape(p))
+
 
 add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
@@ -71,6 +58,11 @@ function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
     push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, tp.dims))
 end
 
+"""
+    graphproto()
+
+Return an [`ONNX.Proto.GraphProto`](@ref) with all fields initialized to empty arrays.
+"""
 graphproto() = ONNX.Proto.GraphProto(
 node = ONNX.Proto.NodeProto[],
 initializer =  ONNX.Proto.TensorProto[],
@@ -79,10 +71,19 @@ output =  ONNX.Proto.ValueInfoProto[],
 value_info =  ONNX.Proto.ValueInfoProto[]
 )
 
-function graphproto(g::CompGraph, outshapes = v -> (nout(v), layertype(v)), namestrat=default_namestrat(vertices(g)))
+"""
+    graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g))
+
+Return an [`ONNX.Proto.GraphProto`](@ref) from `g`.
+
+Argument `outshape` is a function which returns the shape of an `AbstractVertex`.
+
+Argument `namestrat` determines how nodes shall be named.
+"""
+function graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g))
     gp = graphproto()
     pps = map(g.inputs) do v
-        inputprotoprobe!(gp, recursename(v, namestrat), outshapes(v), namestrat)
+        inputprotoprobe!(gp, recursename(v, namestrat), outshape(v), namestrat)
     end
 
     outpps = g(pps...)
@@ -100,7 +101,7 @@ function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
     return newnamestrat(ppout, nextname(pps[1]))
 end
 
-function protoprobe(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.AttributeProto[])
+function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(l, nextname(pp))
     wname, bname = lname .* ("_weight", "_bias")
 
@@ -117,10 +118,10 @@ function protoprobe(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.Attr
     return newnamestrat(ppout, nextname(pp))
 end
 
-(l::Flux.Dense)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Gemm")
+(l::Flux.Dense)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Gemm")
 actfun(::FluxDense, l) = l.σ
 
-(l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv"; attributes= ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [l.pad, l.stride, l.dilation]))
+(l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes= ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [l.pad, l.stride, l.dilation]))
 actfun(::FluxConv, l) = l.σ
 
 function(l::Flux.BatchNorm)(pp::AbstractProbe)
@@ -171,10 +172,10 @@ end
 Base.:+(pps::AbstractProbe...) = attribfun("Add", pps...)
 
 
-function axisfun(optype, pps::AbstractProbe...; dims, axname="axes")
+function axisfun(optype, pps::AbstractProbe...; dims, axname="axes", fshape=identity)
     fname = recursename(lowercase(optype), nextname(pps[1]))
 
-    np_axis = flux2numpydim.(dims, ndims_shape(shape(pps[1])))
+    np_axis = flux2numpydim.(dims, length(shape(pps[1])))
 
     add!(pps[1], ONNX.Proto.NodeProto(
         input = collect(name.(pps)),
@@ -183,7 +184,7 @@ function axisfun(optype, pps::AbstractProbe...; dims, axname="axes")
         attribute = [ONNX.Proto.AttributeProto(axname, np_axis)],
         op_type = optype
     ))
-    return newfrom(pps[1], fname)
+    return newfrom(pps[1], fname, fshape)
 end
 
 scal2tup(x) = (x,)
@@ -191,4 +192,4 @@ scal2tup(x::Tuple) = x
 
 Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims, axname="axis")
 Statistics.mean(pp::AbstractProbe; dims) = axisfun("ReduceMean", pp; dims=scal2tup(dims))
-Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=scal2tup(dims))
+Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=scal2tup(dims), fshape = s -> rmdims(s, dims))

@@ -25,7 +25,7 @@
         NodeProbe(name, namefun) = NodeProbe(name, namefun, [])
         ONNXmutable.add!(p::NodeProbe, n) = push!(p.protos, n)
         ONNXmutable.nextname(p::NodeProbe) = p.namefun
-        ONNXmutable.newfrom(p::NodeProbe, pname) = NodeProbe(pname, p.namefun, p.protos)
+        ONNXmutable.newfrom(p::NodeProbe, pname, Δshape=nothing) = NodeProbe(pname, p.namefun, p.protos)
         ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.protos)
         ONNXmutable.name(p::NodeProbe) = p.name
 
@@ -216,6 +216,26 @@
             v4 = dense("output", v3, 2)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
+        end
+
+        @testset "Linear Conv graph with global pooling without names" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("", v0, 4, relu)
+            v2 = invariantvertex(x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))), v1)
+
+            g_org = CompGraph(v0, v2)
+
+            gp_org = graphproto(g_org)
+            @test length(size(gp_org.output[])) == 2
+
+            gt_new, ss = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, ss)
+            @test name.(vertices(g_new)) == ["input_0", "conv_0", "globalaveragepool_0"]
+
+            indata = reshape(collect(Float32, 1:3*2*2*2), 2,2,3,2)
+            @test size(g_org(indata)) == size(g_new(indata))
+            @test g_org(indata) ≈ g_new(indata)
         end
 
         @testset "Linear Batchnorm and Conv graph with global pooling" begin
