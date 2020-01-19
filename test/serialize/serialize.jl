@@ -83,7 +83,7 @@
 
         @testset "$(tc.layer) node" for tc in (
             (layer=Dense(3,4, relu), indata=reshape(collect(1:12), :, 4) .- 3),
-            (layer=Conv((1,2), 3=>4, relu), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
+            (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)

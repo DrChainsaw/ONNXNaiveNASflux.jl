@@ -100,7 +100,7 @@ function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
     return newnamestrat(ppout, nextname(pps[1]))
 end
 
-function protoprobe(lt::FluxParLayer, l, pp, optype)
+function protoprobe(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(l, nextname(pp))
     wname, bname = lname .* ("_weight", "_bias")
 
@@ -108,6 +108,7 @@ function protoprobe(lt::FluxParLayer, l, pp, optype)
         input=[name(pp), wname, bname],
         output=[lname],
         name=lname,
+        attribute = attributes,
         op_type=optype))
     add!(pp, ONNX.Proto.TensorProto(weights(l), wname))
     add!(pp, ONNX.Proto.TensorProto(bias(l), bname))
@@ -119,7 +120,7 @@ end
 (l::Flux.Dense)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Gemm")
 actfun(::FluxDense, l) = l.σ
 
-(l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv")
+(l::Flux.Conv)(pp::AbstractProbe) = protoprobe(layertype(l), l, pp, "Conv"; attributes= ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [l.pad, l.stride, l.dilation]))
 actfun(::FluxConv, l) = l.σ
 
 function(l::Flux.BatchNorm)(pp::AbstractProbe)
