@@ -7,6 +7,7 @@ import NaiveNASflux: weights, bias
 import NaiveNASflux: indim, outdim, actdim, actrank
 using Setfield
 using Statistics
+import Pkg
 
 include("shapes.jl")
 

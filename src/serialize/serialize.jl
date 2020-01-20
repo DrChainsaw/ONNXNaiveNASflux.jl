@@ -1,5 +1,60 @@
 
 """
+    modelproto(f; namestrat=name_runningnr(), kwargs...)
+    modelproto(f, inshapes::Tuple...; namestrat = name_runningnr()kwargs...)
+    modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
+
+Return an [`ONNX.Proto.ModelProto`](@ref) from `f`.
+
+Argument `inshapes` are size tuples representing the size of each input. An attempt to infer sizes will be made if not  provided.
+Argument `indata` are pairs mapping names to size tuples. Names will be created automatically if not provided.
+
+Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
+"""
+modelproto(f; kwargs...) = modelproto(f, infer_inshapes(f)...; kwargs...)
+modelproto(f, inshapes::Tuple...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
+function modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
+    mp = modelproto(;kwargs...)
+    mp.graph = graphproto(f, indata...;namestrat=namestrat)
+    return mp
+end
+
+"""
+    modelproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g))
+
+Return an [`ONNX.Proto.ModelProto`](@ref) from `g`.
+
+Argument `outshape` is a function which returns the shape of an `AbstractVertex`.
+
+Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
+"""
+function modelproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g), kwargs...)
+    mp = modelproto(;kwargs...)
+    mp.graph = graphproto(g, outshape, namestrat)
+    return mp
+end
+
+function infer_inshapes(f)
+    ml = methods(f);
+    for m in ml.ms
+        m.sig isa DataType && return infer_shape.(m.sig.types[2:end])
+    end
+    return ntuple(i -> missing, ml.mt.max_args)
+end
+infer_shape(::Type{<:Any}) = missing
+infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
+
+modelproto(;kwargs...) = ONNX.Proto.ModelProto(
+    ir_version=ONNX.Proto.Version.IR_VERSION,
+    opset_import=[ONNX.Proto.OperatorSetIdProto(version=12)],
+    producer_name="ONNXmutable.jl",
+    producer_version=string(Pkg.Types.Context().env.project.version), # TODO: Ugh....
+    kwargs...)
+
+
+
+
+"""
     AbstractProbe
 
 Abstract base class for probes used for serialization.
@@ -80,19 +135,31 @@ Argument `outshape` is a function which returns the shape of an `AbstractVertex`
 
 Argument `namestrat` determines how nodes shall be named.
 """
-function graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g))
+graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(g.inputs, namestrat) .=> shape.(g.inputs))...;namestrat=namestrat)
+
+"""
+    graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())
+
+Return an [`ONNX.Proto.GraphProto`](@ref) from `g`.
+
+Argument indata are name => shape pairs for the input data.
+
+Argument `namestrat` determines how nodes shall be named.
+"""
+function graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())
     gp = graphproto()
-    pps = map(g.inputs) do v
-        inputprotoprobe!(gp, recursename(v, namestrat), outshape(v), namestrat)
+    pps = map(indata) do (name, shape)
+        inputprotoprobe!(gp, name, shape, namestrat)
     end
 
-    outpps = g(pps...)
+    outpps = f(pps...)
 
     add_output!.(outpps)
 
     return gp
 end
 
+# Only purpose is to snag the name in case this is the naming strategy
 function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
     ppsname = map(pps) do pp
         newnamestrat(pp, nextname(pp)(v))

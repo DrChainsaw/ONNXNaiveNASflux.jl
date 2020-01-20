@@ -5,13 +5,12 @@ ONNX.Proto.ValueInfoProto(
     name=name,
     _type=ONNX.Proto.TypeProto(
         tensor_type=ONNX.Proto.TypeProto_Tensor(
-            shape=ONNX.Proto.TensorShapeProto(
-                dim=[tsp_d(s) for s in inshape]
-            )
+            shape=ONNX.Proto.TensorShapeProto(inshape)
         )
     )
 )
-
+ONNX.Proto.TensorShapeProto(shape) = ONNX.Proto.TensorShapeProto(dim=[tsp_d(s) for s in shape])
+ONNX.Proto.TensorShapeProto(::Missing) = ONNX.Proto.TensorShapeProto()
 tsp_d(::Missing) = ONNX.Proto.TensorShapeProto_Dimension()
 tsp_d(n::Integer) = ONNX.Proto.TensorShapeProto_Dimension(dim_value=n)
 

@@ -110,9 +110,10 @@ invariantops[:ReduceMean] = function(params)
 end
 
 verts[:Input] = function(name, inputs, params; kwargs...)
-    inshape = params[:size]
+    inshape = reverse(params[:size])
     indims = length(inshape)
-    return inputvertex(name, inshape[max(1, actdim(indims))], guess_layertype(indims))
+    insize = indims > 0 ? inshape[max(1, actdim(indims))] : 1 # assume scalar
+    return inputvertex(name, insize, guess_layertype(indims))
 end
 
 verts[:Add] = function(name, inputs, params; conf=VertexConf())

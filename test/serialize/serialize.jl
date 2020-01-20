@@ -1,9 +1,5 @@
 
 @testset "Structure" begin
-    import ONNXmutable: optype, actfuns, fluxlayers, invariantops
-    using NaiveNASflux
-    import NaiveNASflux: weights, bias
-    using Statistics
 
     function serdeser(p::T, convfun = cfun(p)) where T
         iob = PipeBuffer();
@@ -14,8 +10,13 @@
     cfun(pt) = ONNX.convert
     cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
     cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
+    cfun(::ONNX.Proto.ModelProto) = mp -> (ONNX.convert(mp), ONNXmutable.sizes(mp.graph))
 
     @testset "Nodes" begin
+        using Statistics
+        import ONNXmutable: optype, actfuns, fluxlayers, invariantops
+        using NaiveNASflux
+        import NaiveNASflux: weights, bias
         import ONNXmutable: AbstractProbe, nextname, newfrom, add!, genname
         struct NodeProbe{F} <: AbstractProbe
             name::String
@@ -163,12 +164,47 @@
             g_new = CompGraph(gt_new, sizes)
 
             @test name.(vertices(g_org)) == name.(vertices(g_new))
+            @test nout.(vertices(g_org)) == nout.(vertices(g_new))
+            @test nin.(vertices(g_org)) == nin.(vertices(g_new))
 
             outsize = nout(g_org.inputs[1])
             bs = 4
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
             @test g_org(indata) ≈ g_new(indata)
             return g_new
+        end
+
+        @testset "Generic function" begin
+            l1 = Dense(2, 3, elu)
+            l2 = Dense(3, 2)
+            function f(x, y)
+                x1 = l1(x)
+                x2 = l2(x1)
+                return x2 .+ y
+            end
+
+            gp_sizes = graphproto(f, "x" => (2, missing), "y" => (2,))
+            g_sizes = CompGraph(serdeser(gp_sizes)...)
+
+            x = reshape(collect(Float32, 1:2*4), 2,4)
+            y = Float32[5, 6]
+
+            @test name.(vertices(g_sizes)) == ["x", "dense_0", "dense_1", "y", "add_0"]
+            @test nout.(vertices(g_sizes)) == [2, 3, 2, 2, 2]
+            @test nin.(vertices(g_sizes)) == [[], [2], [3], [], [2, 2]]
+
+            @test g_sizes(x, y) ≈ f(x,y)
+
+            function f(x)
+                x1 = l1(x)
+                return l2(x1)
+            end
+
+            gp_nosizes =  graphproto(f, "x" => missing)
+            g_nosizes = CompGraph(serdeser(gp_nosizes)...)
+
+            @test name.(vertices(g_nosizes)) == ["x", "dense_0", "dense_1"]
+            @test g_nosizes(x) ≈ f(x)
         end
 
         @testset "Linear Dense graph" begin
@@ -340,6 +376,39 @@
             indata1 = reshape(collect(Float32, 1:3*4), nout(vins[1]), :)
             indata2 = indata1 .* -0.5
             @test g_org(indata1, indata2) == g_new(indata1, indata2)
+        end
+    end
+
+    @testset "Models" begin
+        import ONNXmutable: modelproto
+
+        @testset "Generic function infer" begin
+            _f(x, y) = x .+ y
+            f(x, y) = _f(x,y)
+            f(x::Matrix{Int}, y::Matrix{Int}) = _f(x, y)
+
+            mp = modelproto(f)
+            mt, ss = serdeser(mp)
+
+            @test length(ss["data_0"]) == 2
+            @test length(ss["data_1"]) == 2
+
+            g = CompGraph(mt, ss)
+            g([1,2], [3,4]) == f([1,2], [3,4])
+        end
+
+        @testset "CompGraph infer" begin
+            vis = inputvertex.("in", [2, 2], Ref(FluxDense()))
+            g_org = CompGraph(vis, +(vis...))
+
+            mp = modelproto(g_org)
+            mt, ss = serdeser(mp)
+
+            @test length(ss["in_0"]) == 2
+            @test length(ss["in_1"]) == 2
+
+            g_new = CompGraph(mt, ss)
+            g_org([1,2], [3,4]) == g_new([1,2], [3,4])
         end
     end
 end
