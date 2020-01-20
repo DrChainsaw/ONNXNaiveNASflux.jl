@@ -1,4 +1,12 @@
 
+
+onnx(filename::AbstractString, f, args...; kwargs...) = onnx(filename, modelproto(f, args...; kwargs...))
+onnx(io::IO, f, args...; kwargs...) = onnx(io, modelproto(f, args...; kwargs...))
+
+onnx(filename::AbstractString, mp::ONNX.Proto.ModelProto) = open(io -> onnx(io, mp), filename, "w")
+onnx(io::IO, mp::ONNX.Proto.ModelProto) = ONNX.writeproto(io, mp)
+
+
 """
     modelproto(f; namestrat=name_runningnr(), kwargs...)
     modelproto(f, inshapes::Tuple...; namestrat = name_runningnr()kwargs...)
@@ -6,13 +14,13 @@
 
 Return an [`ONNX.Proto.ModelProto`](@ref) from `f`.
 
-Argument `inshapes` are size tuples representing the size of each input. An attempt to infer sizes will be made if not  provided.
+Argument `inshapes` are size tuples representing the shape of each input. An attempt to infer sizes will be made if not  provided.
 Argument `indata` are pairs mapping names to size tuples. Names will be created automatically if not provided.
 
 Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
 """
 modelproto(f; kwargs...) = modelproto(f, infer_inshapes(f)...; kwargs...)
-modelproto(f, inshapes::Tuple...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
+modelproto(f, inshapes::Union{Tuple, Missing}...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
 function modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
     mp = modelproto(;kwargs...)
     mp.graph = graphproto(f, indata...;namestrat=namestrat)
@@ -24,7 +32,7 @@ end
 
 Return an [`ONNX.Proto.ModelProto`](@ref) from `g`.
 
-Argument `outshape` is a function which returns the shape of an `AbstractVertex`.
+Argument `outshape` is a function which returns a size tuple representing the shape of the output of a given `AbstractVertex`.
 
 Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
 """
@@ -37,7 +45,7 @@ end
 function infer_inshapes(f)
     ml = methods(f);
     for m in ml.ms
-        m.sig isa DataType && return infer_shape.(m.sig.types[2:end])
+        m.sig isa DataType && return Tuple(infer_shape.(m.sig.types[2:end]))
     end
     return ntuple(i -> missing, ml.mt.max_args)
 end

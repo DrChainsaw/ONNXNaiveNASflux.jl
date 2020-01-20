@@ -7,8 +7,9 @@ Return a [`ONNX.Types.Model`](@ref) and a Dict mapping input variables to size t
 
 Beware that missing/variable size data for a dimension results in a random size for that dimension. Therefore sizes should mostly be used to determine the number of dimensions.
 """
-function extract(modelfile)
-   f = readproto(open(modelfile), ONNX.Proto.ModelProto())
+extract(modelfile::AbstractString) = open(io -> extract(io), modelfile)
+function extract(io::IO)
+   f = readproto(io, ONNX.Proto.ModelProto())
    return convert(f), sizes(f)
 end
 
@@ -28,7 +29,8 @@ Base.size(tsp_d::ONNX.Proto.TensorShapeProto_Dimension) = isdefined(tsp_d, :dim_
 
 Return a [`CompGraph`](@ref) loaded from the given file.
 """
-NaiveNASlib.CompGraph(filename::String) = CompGraph(extract(filename)...)
+NaiveNASlib.CompGraph(filename::String) = open(io -> CompGraph(io), filename)
+NaiveNASlib.CompGraph(io::IO) = CompGraph(extract(io)...)
 NaiveNASlib.CompGraph(m::ONNX.Types.Model, sizes) = CompGraph(m.graph, sizes)
 
 function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes)

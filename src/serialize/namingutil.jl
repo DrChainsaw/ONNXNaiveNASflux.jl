@@ -2,7 +2,7 @@
 
 default_namestrat(g::CompGraph) = default_namestrat(vertices(g))
 function default_namestrat(vs::AbstractVector{<:AbstractVertex})
-    all(isnamed, vs) && return v -> name(v)
+    all(isnamed, vs) && length(unique(name.(vs))) == length(name.(vs)) && return v -> name(v)
     namegen = name_runningnr()
     ng(v::AbstractVertex) = namegen
     ng(f) = namegen(f)

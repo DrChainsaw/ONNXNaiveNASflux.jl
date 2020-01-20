@@ -7,10 +7,15 @@
         return convfun(ONNX.readproto(iob, T()))
     end
 
+    function serdeser(p::ONNX.Proto.ModelProto)
+        iob = PipeBuffer();
+        onnx(iob, p)
+        return ONNXmutable.extract(iob)
+    end
+
     cfun(pt) = ONNX.convert
     cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
     cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
-    cfun(::ONNX.Proto.ModelProto) = mp -> (ONNX.convert(mp), ONNXmutable.sizes(mp.graph))
 
     @testset "Nodes" begin
         using Statistics
@@ -235,6 +240,23 @@
             @test g_org(indata) ≈ g_new(indata)
         end
 
+        @testset "Linear Dense graph non-unique names" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("vv", v0, 4, selu)
+            v2 = dense("vv", v1, 5, relu)
+            g_org = CompGraph(v0, v2)
+
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes)
+
+            @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1",]
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            @test g_org(indata) ≈ g_new(indata)
+        end
+
         @testset "Linear Conv graph" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv1", v0, 4, selu)
@@ -409,6 +431,68 @@
 
             g_new = CompGraph(mt, ss)
             g_org([1,2], [3,4]) == g_new([1,2], [3,4])
+        end
+    end
+
+    @testset "Save to file" begin
+        using NaiveNASflux
+        function tryfile(filename, args...; kwargs...)
+            try
+                onnx(filename, args...; kwargs...)
+                return CompGraph(filename)
+            finally
+                rm(filename;force=true)
+            end
+        end
+
+        @testset "Generic function no pars" begin
+            f = (x,y) -> x + y
+            g = tryfile("generic_function_no_pars.onnx", f)
+            @test name.(vertices(g)) == ["data_0", "data_1", "add_0"]
+            @test g(1,3) == f(1, 3)
+        end
+
+        @testset "Generic function sizes" begin
+            f = (x,y) -> x + y
+            g = tryfile("generic_function_sizes.onnx", f, (2,missing), (2,missing))
+            nout.(vertices(g)) == [2, 2]
+            @test g([1,3], [2, 4]) == f([1,3], [2, 4])
+        end
+
+        @testset "Simple graph no pars" begin
+            v0 = inputvertex("in", 3, FluxDense())
+            v1 = mutable("dense1", Dense(3, 2, relu), v0)
+            v2 = mutable("dense2", Dense(2, 3), v1)
+            g_org = CompGraph(v0, v2)
+
+            g_new = tryfile("simple_graph_no_pars.onnx", g_org)
+
+            @test name.(vertices(g_org)) == name.(vertices(g_new))
+            @test nout.(vertices(g_org)) == nout.(vertices(g_new))
+            @test nin.(vertices(g_org)) == nin.(vertices(g_new))
+
+            indata = reshape(collect(Float32, 1:3*2), 3,2)
+            @test g_org(indata) ≈ g_new(indata)
+        end
+
+        @testset "Simple graph namestrat" begin
+            v0 = inputvertex("in", 3, FluxConv{2}())
+            v1 = mutable("conv", Conv((1,2), 3 => 4, relu), v0)
+            v2 = mutable("bn", BatchNorm(4, elu), v1)
+            g_org = CompGraph(v0, v2)
+
+            ng = ONNXmutable.name_runningnr()
+            ns(v::MutationVertex) = n -> ng
+            ns(n) = ng(n)
+
+            g_new = tryfile("simple_graph_namestrat.onnx", g_org; namestrat=ns)
+
+            @test name.(vertices(g_new)) == ["in_0", "conv_0", "batchnorm_0"]
+            @test nout.(vertices(g_org)) == nout.(vertices(g_new))
+            @test nin.(vertices(g_org)) == nin.(vertices(g_new))
+
+            indata = reshape(collect(Float32, 1:1*2*3*4), 1,2,3,4)
+            @test g_org(indata) ≈ g_new(indata)
         end
     end
 end

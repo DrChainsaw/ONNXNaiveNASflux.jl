@@ -9,6 +9,8 @@ using Setfield
 using Statistics
 import Pkg
 
+export onnx
+
 include("shapes.jl")
 
 
