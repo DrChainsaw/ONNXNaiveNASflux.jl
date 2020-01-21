@@ -4,6 +4,36 @@ const fluxlayers = Dict{Symbol, Any}()
 const invariantops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
 
+# Rundown of the basic idea here:
+
+# Aspect 1
+# ONNX does not have activation functions as an attribute to its layers but rather represents them as a separate node
+# This would indeed be workable, but...
+# 1. It is a bit annoying that model -> serialize -> deserialize does not result in the exact same thing
+# 2. If one wants to use the mutation functionality of NaiveNASflux it might not be desirable to have activation
+#    functions as separate vertices in the graph as this invites for things like inserting something else between
+#    the layer and its activation function.
+
+# To be able to have activation functions back inside their layers when deserializing, whenever an op which is a key
+# in actlayers is encountered there is a "lookahead" to see if the op of the next node is in actfuns. If it is, the
+# two ops will be merged into one vertex containing the layer and its activation function.
+# A very similar thing is done for global pooling operations followed by squeeze or reshape.
+
+# Aspect 2
+# The vertices of NaiveNASflux require a few inputs when creating them. One in particular is knowledge of the size
+# trait which is obviously not possible to obtain from the ONNX data. In order to spare users from having to supply
+#  this extra input with each operation there is one dict per "general type".
+
+# As NaiveNASflux already has the knowledge what is needed for all layers in Flux, they have their own dict
+#  (fluxlayers) which just outsources the vertex creation to NaiveNASflux. Note that all actlayers are inserted
+# in this dict.
+
+# Functions which always produce the same number of outputs as inputs and are not defined in Flux, e.g.
+#  GlobalAveragePool end up in invariantops.
+
+# Functions which have dedicated vertex construction methods, such as Concat and Add end up in verts.
+
+
 actfuns[:Relu] = params -> Flux.relu
 actfuns[:Elu] = function(params)
     α = get(params, :alpha, 1)
@@ -147,3 +177,5 @@ function refresh()
 end
 
 refresh()
+
+list_supported_ops(io::IO=stdout) = foreach(ot -> println(io, ot), filter(ot -> ot != :Input, sort(collect(keys(verts)))))

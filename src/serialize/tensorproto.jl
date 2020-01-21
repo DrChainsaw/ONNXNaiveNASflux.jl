@@ -13,6 +13,8 @@ ONNX.Proto.TensorShapeProto(shape) = ONNX.Proto.TensorShapeProto(dim=[tsp_d(s) f
 ONNX.Proto.TensorShapeProto(::Missing) = ONNX.Proto.TensorShapeProto()
 tsp_d(::Missing) = ONNX.Proto.TensorShapeProto_Dimension()
 tsp_d(n::Integer) = ONNX.Proto.TensorShapeProto_Dimension(dim_value=n)
+tsp_d(s::String) = ONNX.Proto.TensorShapeProto_Dimension(dim_param=s)
+tsp_d(s::Symbol) = tsp_d(string(s))
 
 ONNX.Proto.TensorProto(t::AbstractArray{Float32,N}, name ="") where N = ONNX.Proto.TensorProto(
     dims=collect(reverse(size(t))),

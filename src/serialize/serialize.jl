@@ -92,6 +92,7 @@ nextname(p::ProtoProbe) = p.nextname
 add!(p::ProtoProbe, n) = add!(p.graph, n)
 shape(p::ProtoProbe) = p.shape
 add_output!(p::ProtoProbe) = push!(p.graph.output, ONNX.Proto.ValueInfoProto(name(p), shape(p)))
+Base.ndims(p::AbstractProbe) = length(shape(p))
 function inputprotoprobe!(gp, name, shape, namestrat)
     push!(gp.input, ONNX.Proto.ValueInfoProto(name, shape))
     pp = ProtoProbe(name, shape, namestrat, gp)
@@ -250,7 +251,7 @@ Base.:+(pps::AbstractProbe...) = attribfun("Add", pps...)
 function axisfun(optype, pps::AbstractProbe...; dims, axname="axes", fshape=identity)
     fname = recursename(lowercase(optype), nextname(pps[1]))
 
-    np_axis = flux2numpydim.(dims, length(shape(pps[1])))
+    np_axis = flux2numpydim.(dims, ndims(pps[1]))
 
     add!(pps[1], ONNX.Proto.NodeProto(
         input = collect(name.(pps)),

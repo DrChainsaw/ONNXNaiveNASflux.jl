@@ -15,4 +15,7 @@ using Test
         include("serialize/tensorproto.jl")
         include("serialize/serialize.jl")
     end
+
+    @info "Test README examples"
+    include("examples.jl")
 end
