@@ -236,6 +236,8 @@ Flux.elu(pp::AbstractProbe, α=1) = attribfun("Elu", pp; attributes = [ONNX.Prot
 Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
 (l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
+(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun("AveragePool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
+(l::Flux.Dropout)(pp::AbstractProbe) = attribfun("Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
 
 
 function globalmeanpool(pp::AbstractProbe, wrap)
@@ -251,13 +253,18 @@ Base.:+(pps::AbstractProbe...) = attribfun("Add", pps...)
 function axisfun(optype, pps::AbstractProbe...; dims, axname="axes", fshape=identity)
     fname = recursename(lowercase(optype), nextname(pps[1]))
 
-    np_axis = flux2numpydim.(dims, ndims(pps[1]))
+    attrib = if isempty(dims)
+        ONNX.Proto.AttributeProto[]
+    else
+        np_axis = flux2numpydim.(dims, ndims(pps[1]))
+        [ONNX.Proto.AttributeProto(axname, np_axis)]
+    end
 
     add!(pps[1], ONNX.Proto.NodeProto(
         input = collect(name.(pps)),
         output = [fname],
         name = fname,
-        attribute = [ONNX.Proto.AttributeProto(axname, np_axis)],
+        attribute = attrib,
         op_type = optype
     ))
     return newfrom(pps[1], fname, fshape)
@@ -267,5 +274,31 @@ scal2tup(x) = (x,)
 scal2tup(x::Tuple) = x
 
 Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims, axname="axis")
-Statistics.mean(pp::AbstractProbe; dims) = axisfun("ReduceMean", pp; dims=scal2tup(dims))
+Statistics.mean(pp::AbstractProbe; dims=()) = axisfun("ReduceMean", pp; dims=scal2tup(dims))
 Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=scal2tup(dims), fshape = s -> rmdims(s, dims))
+
+reshape_keepshape(pp::AbstractProbe, shape) = reshape(pp, shape)
+Base.reshape(pp::AbstractProbe, shape...) = reshape(pp, shape)
+function Base.reshape(pp::AbstractProbe, shape::Tuple)
+    fname = recursename("Reshape", nextname(pp))
+    sname = fname .* "_shape"
+    fluxshape = collect(map(s -> s == Colon() ? -1 : s, shape))
+
+    add!(pp, ONNX.Proto.NodeProto(
+        input=[name(pp), sname],
+        output=[fname],
+        name=fname,
+        op_type="Reshape"))
+    add!(pp, ONNX.Proto.TensorProto(reverse(fluxshape), sname))
+
+    fshape = function(s)
+        return map(enumerate(fluxshape)) do (ind, new)
+            new == -1 && return missing # CBA to figure out how to do this...
+            new == 0 && return s[ind]
+            return new
+        end
+    end
+
+    return newfrom(pp, fname, fshape)
+end
+expanddims(p::AbstractProbe, x, dims) = p

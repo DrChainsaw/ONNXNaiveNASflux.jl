@@ -38,11 +38,13 @@
         @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
             (op=:Relu, attr = Dict(), fd=invariantops),
             (op=:Elu, attr = Dict(), fd=invariantops),
-            (op=:Elu, attr = Dict(:alpha => 5f-1), fd=invariantops),
+            (op=:Elu, attr = Dict(:alpha => 0.5f0), fd=invariantops),
             (op=:Selu, attr = Dict(), fd=invariantops),
-            (op=:Selu, attr = Dict(:alpha => 15f-1), fd=invariantops),
+            (op=:Selu, attr = Dict(:alpha => 1.5f0), fd=invariantops),
             (op=:GlobalAveragePool, attr=Dict(), fd=invariantops),
-            (op=:MaxPool, attr=Dict(:kernel_shape=>(1,2), :pads=>(2,1), :strides=>(2,2)), fd=fluxlayers)
+            (op=:MaxPool, attr=Dict(:kernel_shape=>(1,2), :pads=>(2,1), :strides=>(2,2)), fd=fluxlayers),
+            (op=:AveragePool, attr=Dict(:kernel_shape=>(3,2), :pads=>(1,0), :strides=>(2,2)), fd=fluxlayers),
+            (op=:Dropout, attr=Dict(:ratio => 0.2f0), fd=fluxlayers),
             )
 
             inprobe = NodeProbe("input", f -> "output")
@@ -85,6 +87,32 @@
             @test res.name == name(outprobe)
             expdims = tc.dims isa Tuple ? collect(tc.dims) : tc.dims
             @test ONNXmutable.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
+        end
+
+        @testset "Reshape" begin
+            inprobe = NodeProbe("input", f -> "output")
+
+            shapeout = 1
+            function ONNXmutable.newfrom(p::NodeProbe, pname, Δshape::Function)
+                shapeout = Δshape((:A, missing, 12))
+                return NodeProbe(pname, p.namefun, p.protos)
+             end
+
+            outprobe = reshape(inprobe, (0, 3, 2, Colon()))
+
+            @test length(outprobe.protos) == 2
+
+            res = serdeser(outprobe.protos[1])
+            newshape = serdeser(outprobe.protos[2])
+
+            @test newshape == [-1, 2, 3, 0]
+
+            @test res.input == [name(inprobe), outprobe.protos[2].name]
+            @test res.output == [name(outprobe)]
+            @test res.op_type == "Reshape"
+            @test res.name == name(outprobe)
+            @test ismissing(shapeout[end])
+            @test collect(skipmissing(shapeout)) == [:A, 3, 2]
         end
 
         @testset "$(tc.layer) node" for tc in (

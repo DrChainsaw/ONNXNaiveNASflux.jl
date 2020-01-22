@@ -45,7 +45,7 @@ end
     want = sosec
     add = false
     found = String[]
-    for line in eachline("../README.md")
+    for line in eachline(joinpath(dirname(pathof(ONNXmutable)),"..", "README.md"))
         add && line == bts && break
         add && !isempty(line) && push!(found, line)
         if line == sosec

@@ -123,7 +123,7 @@ invariantops[:ReduceMean] = function(params)
     dimexp =
     if keepdims && ismissing(np_axes)
         # As mean returns a scalar when no dimensions are provided
-        (out, x, dims) -> fill(out, ntuple(i -> 1, ndims(x)))
+        expanddims
     elseif !keepdims
         (out, x, dims) -> dropdims(out, dims=dims)
     else
@@ -138,6 +138,7 @@ invariantops[:ReduceMean] = function(params)
         return dimexp(out, x, dims)
     end
 end
+expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = reverse(params[:size])

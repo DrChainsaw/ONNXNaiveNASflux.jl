@@ -2,8 +2,10 @@
 
 default_namestrat(g::CompGraph) = default_namestrat(vertices(g))
 function default_namestrat(vs::AbstractVector{<:AbstractVertex})
-    all(isnamed, vs) && length(unique(name.(vs))) == length(name.(vs)) && return v -> name(v)
+    # Even if all vertices have unique names, we can't be certain that no vertex produces more than one node
+    # Therefore, we must take a pass through name_runningnr for each op even after we have mapped the vertex to a nextname. This is the reason for the v -> f -> namegen(v, "") wierdness
     namegen = name_runningnr()
+    all(isnamed, vs) && length(unique(name.(vs))) == length(name.(vs)) && return v -> f -> namegen(v, "")
     ng(v::AbstractVertex) = namegen
     ng(f) = namegen(f)
     return ng
@@ -20,10 +22,10 @@ isnamed(::NamedTrait) = true
 function name_runningnr(namefun = genname)
     exists = Set{String}()
 
-    return function(f)
+    return function(f, init="_0")
         bname = genname(f)
-        next = 0
-        candname = bname * "_" * string(next)
+        candname = bname * init
+        next = -1
         while candname in exists
             next += 1
             candname = bname * "_" * string(next)

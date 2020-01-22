@@ -4,7 +4,7 @@ import NaiveNASflux: CompGraph
 @testset "Fluxlayer $(tc.name)" for tc in
     (
     (name="test_averagepool_1d_default", ninputs=1, noutputs=1),
-    #(name="test_averagepool_2d_ceil", ninputs=1, noutputs=1), Not supported!
+    # (name="test_averagepool_2d_ceil", ninputs=1, noutputs=1), Not supported!
     (name="test_averagepool_2d_default", ninputs=1, noutputs=1),
     #(name="test_averagepool_2d_pads", ninputs=1, noutputs=1), Not supported!
     (name="test_averagepool_2d_strides", ninputs=1, noutputs=1),
@@ -36,7 +36,8 @@ import NaiveNASflux: CompGraph
     #(name="test_maxpool_2d_pads", ninputs=1, noutputs=1), Not supported!
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
-    (name="test_maxpool_3d_default", ninputs=1, noutputs=1))
+    (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
+    )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
@@ -48,9 +49,18 @@ import NaiveNASflux: CompGraph
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        @test cg(inputs[1]) ≈ outputs[1]
-    end
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
 
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+    end
 end
 
 @testset "Activation functions $(tc.name)" for tc in
@@ -59,7 +69,7 @@ end
     (name="test_elu_default", ninputs=1, noutputs=1),
     (name="test_elu_example", ninputs=1, noutputs=1),
     (name="test_relu", ninputs=1, noutputs=1),
-    (name="test_selu", ninputs=1, noutputs=1), 
+    (name="test_selu", ninputs=1, noutputs=1),
     (name="test_selu_default", ninputs=1, noutputs=1),
     (name="test_selu_example", ninputs=1, noutputs=1),
     )
@@ -113,6 +123,14 @@ end
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
+
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 end
 
@@ -138,6 +156,16 @@ end
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        @test cg(inputs[1:length(cg.inputs)]...) ≈ outputs[1]
+        res = cg(inputs[1:length(cg.inputs)]...)
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg(inputs[1:length(cg.inputs)]...)
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 end

@@ -22,6 +22,18 @@ ONNX.Proto.TensorProto(t::AbstractArray{Float32,N}, name ="") where N = ONNX.Pro
     float_data = reshape(t,:),
     name=name)
 
+ONNX.Proto.TensorProto(t::AbstractArray{Int64,N}, name ="") where N = ONNX.Proto.TensorProto(
+    dims=collect(reverse(size(t))),
+    data_type=ONNX.Proto.TensorProto_DataType.INT64,
+    int64_data = reshape(t,:),
+    name=name)
+
+ONNX.Proto.TensorProto(t::AbstractArray{Int32,N}, name ="") where N = ONNX.Proto.TensorProto(
+    dims=collect(reverse(size(t))),
+    data_type=ONNX.Proto.TensorProto_DataType.INT32,
+    int32_data = reshape(t,:),
+    name=name)
+
 ONNX.Proto.AttributeProto(name::String, i::Int64) = ONNX.Proto.AttributeProto(
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.INT,

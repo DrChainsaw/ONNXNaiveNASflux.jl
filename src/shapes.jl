@@ -18,6 +18,7 @@ function shape(v::AbstractVertex)
     return outshape
 end
 shape(::FluxLayer, outsize) = missing
+shape(::Shape1D, outsize) = (outsize,)
 shape(::FluxDense, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
 shape(::FluxRecurrent, outsize) = (missing, outsize, missing)
