@@ -4,7 +4,7 @@ import NaiveNASflux: CompGraph
 @testset "Fluxlayer $(tc.name)" for tc in
     (
     (name="test_averagepool_1d_default", ninputs=1, noutputs=1),
-    #(name="test_averagepool_2d_ceil", ninputs=1, noutputs=1), Not supported!
+    # (name="test_averagepool_2d_ceil", ninputs=1, noutputs=1), Not supported!
     (name="test_averagepool_2d_default", ninputs=1, noutputs=1),
     #(name="test_averagepool_2d_pads", ninputs=1, noutputs=1), Not supported!
     (name="test_averagepool_2d_strides", ninputs=1, noutputs=1),
@@ -36,7 +36,8 @@ import NaiveNASflux: CompGraph
     #(name="test_maxpool_2d_pads", ninputs=1, noutputs=1), Not supported!
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
-    (name="test_maxpool_3d_default", ninputs=1, noutputs=1))
+    (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
+    )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
@@ -48,14 +49,30 @@ import NaiveNASflux: CompGraph
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        @test cg(inputs[1]) ≈ outputs[1]
-    end
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
 
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+    end
 end
 
 @testset "Activation functions $(tc.name)" for tc in
     (
-    (name="test_relu", ninputs=1, noutputs=1),)
+    (name="test_elu", ninputs=1, noutputs=1),
+    (name="test_elu_default", ninputs=1, noutputs=1),
+    (name="test_elu_example", ninputs=1, noutputs=1),
+    (name="test_relu", ninputs=1, noutputs=1),
+    (name="test_selu", ninputs=1, noutputs=1),
+    (name="test_selu_default", ninputs=1, noutputs=1),
+    (name="test_selu_example", ninputs=1, noutputs=1),
+    )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
@@ -70,6 +87,14 @@ end
     (
     (name="test_globalaveragepool", ninputs=1, noutputs=1),
     (name="test_globalaveragepool_precomputed", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_default_axes_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_default_axes_keepdims_random", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_do_not_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_do_not_keepdims_random", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_keepdims_random", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_negative_axes_keepdims_example", ninputs=1, noutputs=1),
+    (name="test_reduce_mean_negative_axes_keepdims_random", ninputs=1, noutputs=1),
     (name="test_reshape_extended_dims", ninputs=2, noutputs=1),
     (name="test_reshape_negative_dim", ninputs=2, noutputs=1),
     (name="test_reshape_negative_extended_dims", ninputs=2, noutputs=1),
@@ -78,19 +103,34 @@ end
     (name="test_reshape_reordered_all_dims", ninputs=2, noutputs=1),
     (name="test_reshape_reordered_last_dims", ninputs=2, noutputs=1),
     (name="test_reshape_zero_and_negative_dim", ninputs=2, noutputs=1),
-    (name="test_reshape_zero_dim", ninputs=2, noutputs=1))
+    (name="test_reshape_zero_dim", ninputs=2, noutputs=1),
+    (name="test_squeeze", ninputs=1, noutputs=1),
+    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1)
+    )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
         @test haskey(invariantops, optype(node))
         op = invariantops[optype(node)](node.attribute, params(node, gb)...)
-        @test op(inputs[1]) ≈ outputs[1]
+        res = op(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        @test cg(inputs[1]) ≈ outputs[1]
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 end
 
@@ -98,12 +138,34 @@ end
     (
     (name="test_add", ninputs=2, noutputs=1),
     #(name="test_add_bcast", ninputs=2, noutputs=1) # Op is supported, but we get the wrong idea about what type of inputvertex to create from 3D input
+    (name="test_concat_1d_axis_0", ninputs=2, noutputs=1),
+    (name="test_concat_1d_axis_negative_1", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_0", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_1", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_negative_1", ninputs=2, noutputs=1),
+    (name="test_concat_2d_axis_negative_2", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_0", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_1", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_2", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_negative_1", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_negative_2", ninputs=2, noutputs=1),
+    (name="test_concat_3d_axis_negative_3", ninputs=2, noutputs=1),
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        @test cg(inputs[1:length(cg.inputs)]...) ≈ outputs[1]
+        res = cg(inputs[1:length(cg.inputs)]...)
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg(inputs[1:length(cg.inputs)]...)
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 end

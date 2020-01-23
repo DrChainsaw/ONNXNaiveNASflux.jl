@@ -4,7 +4,49 @@ const fluxlayers = Dict{Symbol, Any}()
 const invariantops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
 
+# Rundown of the basic idea here:
+
+# Aspect 1
+# ONNX does not have activation functions as an attribute to its layers but rather represents them as a separate node
+# This would indeed be workable, but...
+# 1. It is a bit annoying that model -> serialize -> deserialize does not result in the exact same thing
+# 2. If one wants to use the mutation functionality of NaiveNASflux it might not be desirable to have activation
+#    functions as separate vertices in the graph as this invites for things like inserting something else between
+#    the layer and its activation function.
+
+# To be able to have activation functions back inside their layers when deserializing, whenever an op which is a key
+# in actlayers is encountered there is a "lookahead" to see if the op of the next node is in actfuns. If it is, the
+# two ops will be merged into one vertex containing the layer and its activation function.
+# A very similar thing is done for global pooling operations followed by squeeze or reshape.
+
+# Aspect 2
+# The vertices of NaiveNASflux require a few inputs when creating them. One in particular is knowledge of the size
+# trait which is obviously not possible to obtain from the ONNX data. In order to spare users from having to supply
+#  this extra input with each operation there is one dict per "general type".
+
+# As NaiveNASflux already has the knowledge what is needed for all layers in Flux, they have their own dict
+#  (fluxlayers) which just outsources the vertex creation to NaiveNASflux. Note that all actlayers are inserted
+# in this dict.
+
+# Functions which always produce the same number of outputs as inputs and are not defined in Flux, e.g.
+#  GlobalAveragePool end up in invariantops.
+
+# Functions which have dedicated vertex construction methods, such as Concat and Add end up in verts.
+
+
 actfuns[:Relu] = params -> Flux.relu
+actfuns[:Elu] = function(params)
+    α = get(params, :alpha, 1)
+    return x -> Flux.elu(x, oftype(x, α))
+end
+actfuns[:Selu] = function(params)
+    haskey(params, :alpha) || haskey(params, :gamma) && return Flux.selu
+    γ = get(params, :gamma, Float32(1.05070102214813232421875))
+    α = get(params, :alpha, Float32(1.67326319217681884765625))
+    return x -> selu(x, oftype(x, γ), oftype(x, α))
+end
+Flux.selu(x, γ, α) = γ * ifelse(x > 0, x/1, α * (exp(x) - 1))
+
 
 _akpsd(params) = get(params, :activation, identity), get(params, :kernel_shape, 1), get(params, :pads, 0), get(params, :strides, 1), get(params, :dilations, 1)
 akpsd(params) = a2t.(_akpsd(params))
@@ -46,33 +88,74 @@ fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
 
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
-    return function(x::AbstractArray{T,N}) where T where N
-        wrap(MeanPool(size(x)[1:N-2])(x))
-    end
+    return x -> globalmeanpool(x, wrap)
+end
+function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
+    wrap(MeanPool(size(x)[1:N-2])(x))
 end
 
 invariantops[:Reshape] = function(params, shape)
     shape_t = Tuple(reverse(shape))
-    return function(x::AbstractArray{T,N}) where T where N
-        # map 0 to "current size" and -1 to "infer from others", i.e ":"
-        newshape = map(s -> s == 0 ? size(x, actdim(N)) : s < 0 ? Colon() : s, shape_t)
-        return reshape(x, newshape)
+    any(s -> s == 0 || s == -1, shape_t) && return x -> reshape_keepshape(x, shape_t)
+    return x -> reshape(x, shape_t)
+end
+function reshape_keepshape(x, shape)
+    offs = ndims(x) - length(shape)
+    newshape = map(enumerate(shape)) do (ind, new)
+        new == -1 && return Colon()
+        new == 0 && return size(x, ind+offs)
+        return new
     end
+    return reshape(x, newshape...)
 end
 
-verts[:Input] = function(name, inputs, params; kwargs...)
-    inshape = params[:size]
-    indims = length(inshape)
-    if indims == 1
-        return inputvertex(name, inshape[1], FluxDense())
+
+invariantops[:Squeeze] = function(params)
+    np_axes = get(params, :axes, missing)
+    dimfun = ismissing(np_axes) ? x -> Tuple(findall(i -> i == 1, size(x))) : x -> Tuple(numpy2fluxdim.(np_axes, ndims(x)))
+    return x -> dropdims(x, dims=dimfun(x))
+end
+
+invariantops[:ReduceMean] = function(params)
+    np_axes = get(params, :axes, missing)
+    keepdims = Bool(get(params, :keepdims, 1))
+
+    dimexp =
+    if keepdims && ismissing(np_axes)
+        # As mean returns a scalar when no dimensions are provided
+        expanddims
+    elseif !keepdims
+        (out, x, dims) -> dropdims(out, dims=dims)
+    else
+        (out, x, dims) -> out
     end
-    return inputvertex(name, inshape[actdim(indims)], FluxConv{indims-2}())
+
+    ismissing(np_axes) && return x -> dimexp(mean(x), x, missing)
+
+    return function(x)
+        dims = Tuple(numpy2fluxdim.(np_axes, ndims(x)))
+        out = mean(x, dims=dims)
+        return dimexp(out, x, dims)
+    end
+end
+expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
+
+verts[:Input] = function(name, inputs, params; kwargs...)
+    inshape = reverse(params[:size])
+    indims = length(inshape)
+    insize = indims > 0 ? inshape[max(1, actdim(indims))] : 1 # assume scalar
+    return inputvertex(name, insize, guess_layertype(indims))
 end
 
 verts[:Add] = function(name, inputs, params; conf=VertexConf())
     td = conf.traitdecoration
     nconf = @set conf.traitdecoration = t -> NamedTrait(td(t), name)
     return NaiveNASlib.elemwise(+, nconf, inputs...)
+end
+
+verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, kwargs...)
+    dims = numpy2fluxdim(params[:axis], inputs[1])
+    return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
 end
 
 
@@ -95,3 +178,5 @@ function refresh()
 end
 
 refresh()
+
+list_supported_ops(io::IO=stdout) = foreach(ot -> println(io, ot), filter(ot -> ot != :Input, sort(collect(keys(verts)))))
