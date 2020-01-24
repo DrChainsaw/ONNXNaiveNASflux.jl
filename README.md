@@ -75,9 +75,11 @@ Squeeze
 
 While the list of supported operations is currently quite meager, it is relatively straightforward to add support for more.
 
-Serialization uses a lightweight graph tracing mechanism. More precisely, assuming one wants to map an ONNX operation to the function `myfun(args::SomeType....)`. What is needed is to implement a method `myfun(args::AbstractProbe...)` which
+Serialization uses a lightweight graph tracing mechanism where `AbstractProbe`s are sent through the function to collect all ONNX operations they encounter.
+
+To map the function `myfun(args::SomeType....)` to an ONNX operation one just defines a method `myfun(args::AbstractProbe...)` which
 1. Adds ONNX information to one of the inputs (does not matter which one)
-2. Returns at least one `AbstractProto` with information for the next function
+2. Returns at least one `AbstractProbe` with information for the next function
 
 This function typically looks something like this:
 
@@ -111,9 +113,9 @@ Deserialization is done by simply mapping operation types to functions in a dict
 import ONNXmutable: actfuns
 
 # All inputs which are not output from another node in the graph are provided in the method call
-actfuns[:MyActFun1] = (params, α, β) -> x -> x^α + β
+actfuns[:SomeOp] = (params, α, β) -> x -> x^α + β
 # Params contains a Dict with attributes.
-actfuns[:MyActFun2] = function(params)
+actfuns[:AnotherOp] = function(params)
     α = get(params, :alpha, 1)
     return x -> α / x
 end

@@ -373,6 +373,29 @@
             @test g_org(indata) ≈ g_new(indata)
         end
 
+        @testset "Dense graph with add + ActivationContribution" begin
+            import ONNXmutable: create_vertex_default
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense(v0, 4, relu)
+            v2 = dense(v0, 4)
+            v3 = v1 + v2
+
+            g_org = CompGraph(v0, v3)
+
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=ActivationContribution))
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            outdata = ones(Float32, nout(v3), size(indata, 2))
+
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            for v in vertices(g_new)
+                @test sum(neuron_value(v)) > 0
+            end
+        end
+
         @testset "Dense graph with cat" begin
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense1", v0, 4, elu)
@@ -381,6 +404,29 @@
             v4 = dense("output", v3, 2, relu)
 
             test_named_graph(CompGraph(v0, v4))
+        end
+
+        @testset "Dense graph with cat + ActivationContribution" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense1", v0, 4, elu)
+            v2 = dense("dense2", v0, 4)
+            v3 = concat("conc", v1, v2)
+            v4 = dense("output", v3, 2, relu)
+
+            g_org = CompGraph(v0, v4)
+
+            gp_org = graphproto(g_org)
+            gt_new, sizes = serdeser(gp_org)
+
+            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=ActivationContribution))
+
+            indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
+            outdata = ones(Float32, nout(v4), size(indata, 2))
+
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            for v in vertices(g_new)
+                @test sum(neuron_value(v)) > 0
+            end
         end
 
         @testset "Conv and batchnorm graph with cat" begin
