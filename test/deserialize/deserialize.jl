@@ -1,6 +1,23 @@
 import ONNXmutable: fluxlayers, actfuns, invariantops, optype, params
 import NaiveNASflux: CompGraph
 
+# For testing since ONNX states that recurrent layers take 3D input while flux uses
+# an Array of 2D Arrays
+function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T
+    # ONNX shape for RNNs inputs is [seq_length, batch_size, input_size]
+    # ONNX.jl reverses this to [input_size, batch_size, seq_length]
+    # Unstacking it to a sequence of [input_size, batch_size]
+    inseq =Flux.unstack(x, 3)
+    out = nothing
+    for inpt in inseq
+         out = l(inpt)
+     end
+    # Just to turn it back to ONNX shape.
+    # In the testdata only the last output in the sequence is present in the reference
+    return reshape(out, size(out)..., 1)
+end
+
+
 @testset "Fluxlayer $(tc.name)" for tc in
     (
     (name="test_averagepool_1d_default", ninputs=1, noutputs=1),
@@ -37,6 +54,7 @@ import NaiveNASflux: CompGraph
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
+    (name="test_rnn_seq_length", ninputs=4, noutputs=1),
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
@@ -44,7 +62,10 @@ import NaiveNASflux: CompGraph
     @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
         @test haskey(fluxlayers, optype(node))
         op = fluxlayers[optype(node)](node.attribute, params(node, gb)...)
-        @test op(inputs[1]) ≈ outputs[1]
+        
+        res = op(inputs[1])
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin

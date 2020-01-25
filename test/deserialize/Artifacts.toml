@@ -211,6 +211,9 @@ git-tree-sha1 = "a8f54fe04de7e810a2a4a4dcdcdc0147091f5b79"
 [test_reshape_zero_dim]
 git-tree-sha1 = "c3ca3149d2fb024446ca706710931d04174d2f88"
 
+[test_rnn_seq_length]
+git-tree-sha1 = "a8070179ed9c267210a80ebd883938c2b1450ff0"
+
 [test_selu]
 git-tree-sha1 = "70aa499c68927394657095b917ee030bf88afb59"
 

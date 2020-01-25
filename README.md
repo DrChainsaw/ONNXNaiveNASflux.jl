@@ -64,11 +64,13 @@ Elu
 Gemm
 GlobalAveragePool
 MaxPool
+RNN
 ReduceMean
 Relu
 Reshape
 Selu
 Squeeze
+Tanh
 ```
 
 ## Adding Operations

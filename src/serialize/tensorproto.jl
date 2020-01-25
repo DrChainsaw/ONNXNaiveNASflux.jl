@@ -57,3 +57,9 @@ ONNX.Proto.AttributeProto(name::String, i::NTuple{N, Int64}) where N = ONNX.Prot
     _type = ONNX.Proto.AttributeProto_AttributeType.INTS,
     ints = collect(i)
 )
+
+ONNX.Proto.AttributeProto(name::String, s::String) where N = ONNX.Proto.AttributeProto(
+    name=name,
+    _type = ONNX.Proto.AttributeProto_AttributeType.STRING,
+    s = Vector{UInt8}(s)
+)

@@ -148,6 +148,41 @@
         end
 
         @testset "$(tc.layer) node" for tc in (
+            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(1:12), :, 4) .- 3),
+            )
+            import NaiveNASflux: hiddenweights
+
+            inprobe = NodeProbe("input", genname)
+
+            outprobe = tc.layer(inprobe)
+
+            @test length(outprobe.protos) == 4
+
+            lp,wip,whp,bp = Tuple(outprobe.protos)
+
+            ln = serdeser(lp)
+            wi = serdeser(wip)
+            wh = serdeser(whp)
+            b = serdeser(bp)
+
+            res = fluxlayers[optype(ln)](ln.attribute, wi, wh, b)
+
+            @test size(weights(res)) == size(weights(tc.layer))
+            @test size(hiddenweights(res)) == size(hiddenweights(tc.layer))
+            @test size(bias(res)) == size(bias(res))
+
+            @test weights(res) ≈ weights(tc.layer)
+            @test hiddenweights(res) ≈ hiddenweights(tc.layer)
+            @test bias(res) ≈ bias(res)
+
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+        end
+
+        @testset "$(tc.layer) node" for tc in (
             (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
             )
 
