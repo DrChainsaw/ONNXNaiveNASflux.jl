@@ -29,13 +29,13 @@ Base.size(tsp_d::ONNX.Proto.TensorShapeProto_Dimension) = isdefined(tsp_d, :dim_
 
 Return a [`CompGraph`](@ref) loaded from the given file.
 """
-NaiveNASlib.CompGraph(filename::String) = open(io -> CompGraph(io), filename)
-NaiveNASlib.CompGraph(io::IO) = CompGraph(extract(io)...)
-NaiveNASlib.CompGraph(m::ONNX.Types.Model, sizes) = CompGraph(m.graph, sizes)
+NaiveNASlib.CompGraph(filename::String, vfun = create_vertex_default) = open(io -> CompGraph(io), filename)
+NaiveNASlib.CompGraph(io::IO, vfun = create_vertex_default) = CompGraph(extract(io)..., vfun)
+NaiveNASlib.CompGraph(m::ONNX.Types.Model, sizes, vfun = create_vertex_default) = CompGraph(m.graph, sizes, vfun)
 
-function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes)
+function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes, vfun = create_vertex_default)
    gb = CompGraphBuilder(g, sizes)
-   outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(g.output), gb))
+   outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(g.output), gb), vfun)
    return CompGraph(gb.inputs, outputs)
 end
 
@@ -52,12 +52,12 @@ Return an `AbstractVertex` created from `n`.
 
 Inputs to the returned vertex are created recursively based on state in `gb`.
 """
-function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node)::AbstractVertex
+function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)::AbstractVertex
       return get!(gb.created, n) do
          n_create, ins = check_combine(gb, n)
-         invertices = map(ni -> vertex(gb, ni), ins)
+         invertices = map(ni -> vertex(gb, ni, vfun), ins)
          # TODO: Let user supply this...
-         v = create_vertex_default(gb, n_create, invertices)
+         v = vfun(gb, n_create, invertices)
          if isempty(nin(v))
             push!(gb.inputs, v)
          end
@@ -97,4 +97,4 @@ function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
    return n, ins
 end
 
-create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array{<:AbstractVertex}) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...)
+create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array{<:AbstractVertex}; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)

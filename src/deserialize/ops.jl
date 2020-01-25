@@ -147,15 +147,14 @@ verts[:Input] = function(name, inputs, params; kwargs...)
     return inputvertex(name, insize, guess_layertype(indims))
 end
 
-verts[:Add] = function(name, inputs, params; conf=VertexConf())
-    td = conf.traitdecoration
-    nconf = @set conf.traitdecoration = t -> NamedTrait(td(t), name)
-    return NaiveNASlib.elemwise(+, nconf, inputs...)
+verts[:Add] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
+    conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = layerfun, kwargs...)
+    return NaiveNASlib.elemwise(+, conf, inputs...)
 end
 
-verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, kwargs...)
+verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
     dims = numpy2fluxdim(params[:axis], inputs[1])
-    return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
+    return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap=layerfun, kwargs...)
 end
 
 
@@ -173,7 +172,7 @@ function refresh()
     end
 
     for (s, f) in invariantops
-        verts[s] = (name, inputs, args...;traitdecoration=identity, kwargs...) -> invariantvertex(f(args...), inputs...; traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
+        verts[s] = (name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...) -> invariantvertex(layerfun(f(args...)), inputs...; traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
     end
 end
 
