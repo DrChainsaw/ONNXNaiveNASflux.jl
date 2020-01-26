@@ -1,6 +1,5 @@
 import ONNXmutable: fluxlayers, actfuns, invariantops, optype, params
-import NaiveNASflux: CompGraph, Flux
-import Flux: Recur
+using NaiveNASflux
 
 # For testing since ONNX states that recurrent layers take 3D input while flux uses
 # an Array of 2D Arrays

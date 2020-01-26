@@ -409,7 +409,7 @@
             @test g_org(indata) ≈ g_new(indata)
         end
 
-        @testset "Dense graph with add + ActivationContribution" begin
+        @testset "Dense graph with add and layerfun" begin
             import ONNXmutable: create_vertex_default
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense(v0, 4, relu)
@@ -421,15 +421,23 @@
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=ActivationContribution))
+            callcnt = 0
+            struct CntSpy <: AbstractMutableComp
+                f
+            end
+            function (c::CntSpy)(x...)
+                callcnt += 1
+                return c.f(x...)
+            end
+            NaiveNASflux.layer(c::CntSpy) = layer(c.f)
+
+            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
 
             Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
-            for v in vertices(g_new)
-                @test sum(neuron_value(v)) > 0
-            end
+            @test callcnt == nv(g_new) - 1
         end
 
         @testset "Dense graph with cat" begin
@@ -442,7 +450,7 @@
             test_named_graph(CompGraph(v0, v4))
         end
 
-        @testset "Dense graph with cat + ActivationContribution" begin
+        @testset "Dense graph with cat and layerfun" begin
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense1", v0, 4, elu)
             v2 = dense("dense2", v0, 4)
@@ -454,15 +462,23 @@
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=ActivationContribution))
+            callcnt = 0
+            struct CntSpy <: AbstractMutableComp
+                f
+            end
+            function (c::CntSpy)(x...)
+                callcnt += 1
+                return c.f(x...)
+            end
+            NaiveNASflux.layer(c::CntSpy) = layer(c.f)
+
+            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
 
             Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
-            for v in vertices(g_new)
-                @test sum(neuron_value(v)) > 0
-            end
+            @test callcnt == nv(g_new) - 1
         end
 
         @testset "Conv and batchnorm graph with cat" begin
