@@ -1,5 +1,6 @@
 import ONNXmutable: fluxlayers, actfuns, invariantops, optype, params
-import NaiveNASflux: CompGraph
+import NaiveNASflux: CompGraph, Flux
+import Flux: Recur
 
 # For testing since ONNX states that recurrent layers take 3D input while flux uses
 # an Array of 2D Arrays
@@ -16,7 +17,6 @@ function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T
     # In the testdata only the last output in the sequence is present in the reference
     return reshape(out, size(out)..., 1)
 end
-
 
 @testset "Fluxlayer $(tc.name)" for tc in
     (
@@ -46,6 +46,9 @@ end
     (name="test_gemm_default_zero_bias", ninputs=3, noutputs=1),
     #(name="test_gemm_transposeA", ninputs=3, noutputs=1), Not supported!
     (name="test_gemm_transposeB", ninputs=3, noutputs=1),
+    (name="test_lstm_defaults", ninputs=3, noutputs=1),
+    (name="test_lstm_with_initial_bias", ninputs=4, noutputs=1),
+    # (name="test_lstm_with_peepholes", ninputs=8, noutputs=1), Not supported!
     (name="test_maxpool_1d_default", ninputs=1, noutputs=1),
     #(name="test_maxpool_2d_ceil", ninputs=1, noutputs=1), Not supported!
     (name="test_maxpool_2d_default", ninputs=1, noutputs=1),
@@ -54,7 +57,7 @@ end
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
-    (name="test_rnn_seq_length", ninputs=4, noutputs=1),
+     (name="test_rnn_seq_length", ninputs=4, noutputs=1),
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
@@ -62,7 +65,7 @@ end
     @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
         @test haskey(fluxlayers, optype(node))
         op = fluxlayers[optype(node)](node.attribute, params(node, gb)...)
-        
+
         res = op(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]

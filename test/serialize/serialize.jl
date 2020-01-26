@@ -149,6 +149,7 @@
 
         @testset "$(tc.layer) node" for tc in (
             (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(1:12), :, 4) .- 3),
+            (layer=LSTM(4, 3), indata = reshape(collect(1:12), 4, :) .- 3),
             )
             import NaiveNASflux: hiddenweights
 
@@ -492,6 +493,15 @@
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             @test g_org(indata) ≈ g_new(indata)
+        end
+
+        @testset "RNN to LSTM" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = mutable("rnn", RNN(nout(v0), 4), v0)
+            v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
+            v3 = dense("dense", v2, 6, elu)
+
+            test_named_graph(CompGraph(v0, v2))
         end
 
         @testset "Graph two inputs two outputs" begin

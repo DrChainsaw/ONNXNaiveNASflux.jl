@@ -62,6 +62,7 @@ a2t(a::AbstractArray) = Tuple(a)
 
 actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxConv{N-2}())))) where {T, N}
     a,_,p,s,d = akpsd(params)
+    @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
     return Conv(weight, bias, a, pad=p, stride=s, dilation=d)
 end
 
@@ -82,12 +83,37 @@ actlayers[:BatchNormalization] = function(params, γ, β, μ, σ²)
 end
 
 
-default_Wb_Rb(Wh_WBh) = similar(Wh_WBh, (size(Wh_WBh, 3), size(Wh_Wbh, 2) * 2))
-default_init_h(Wb_Rb, batchsize) = fill!(similar(Wb_Rb, (size(Wb_Rb,1) ÷ 2, batchsize, size(Wb_Rb,2))), 0)
+default_Wb_Rb(Wh_WBh) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) * 2, size(Wh_WBh, 3))), 0)
+default_init_h(Wb_Rb, sc) = fill!(similar(Wb_Rb, (size(Wb_Rb,1) ÷ sc, size(Wb_Rb,2))), 0)
 
-fluxlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, length(seqlen)))
+fluxlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # Or is it?
 
+    Wi,Wh,b,h = recurrent_arrays(Wi_WBi, Wh_WBh, Wb_Rb, h3d)
+    act = rnnactfuns[Symbol(get(params, :activations, "Tanh"))](1, params)
+    cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(b), 0))
+    return Flux.Recur(cell, Flux.hidden(cell), h)
+end
+
+fluxlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, 8), c3d=default_init_h(Wb_Rb,8), peep=nothing)
+    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # Or is it?
+    @assert isnothing(peep) "Peepholes not supported!" # Or?
+    Wi,Wh,b,h,c = recurrent_arrays(Wi_WBi, Wh_WBh, Wb_Rb, h3d, c3d)
+    # Flux only supports default activation functions
+    # We can only check that given values doesn't deviate
+    supported = [:Sigmoid, :Tanh, :Tanh]
+    acts = get(params, :activations, supported)
+    @assert all(zip(supported, acts)) do (e,a)
+        e == a
+    end "Got unsupported activation function: $acts"
+
+    # b, h and c must all be of the same type when creating a cell, but
+    # it is actually Recur which has the state
+    cell = Flux.LSTMCell(Wi, Wh, b, fill!(similar(b), 0), fill!(similar(b), 0))
+    return Flux.Recur(cell, Flux.hidden(cell), (h, c))
+end
+
+function recurrent_arrays(Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     # ONNX weights are on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
     # Flux weights are of shape [hidden_size, input_size]
     # To spice things up a bit, all julia arrays are loaded in reverse order, i.e we get an array with the arrangement [input_size, hidden_size, num_directions].
@@ -95,11 +121,8 @@ fluxlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh),
     Wi = permutedims(dropdims(Wi_WBi, dims=3))
     Wh = permutedims(dropdims(Wh_WBh, dims=3))
     b = dropdims(sum(reshape(Wb_Rb, :, 2), dims=2),dims=2)
-    h = dropdims(h3d, dims=3)[:, end]
-
-    act = rnnactfuns[Symbol(get(params, :activations, "Tanh"))](1, params)
-
-    return Flux.Recur(Flux.RNNCell(act, Wi, Wh, b, h))
+    hs = (dropdims(h, dims=ndims(h)) for h in h3ds)
+    return Wi, Wh, b, hs...
 end
 
 fluxlayers[:MaxPool] = function(params)

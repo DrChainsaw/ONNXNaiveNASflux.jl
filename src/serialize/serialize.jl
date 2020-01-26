@@ -228,7 +228,10 @@ actfun(::FluxBatchNorm, l) = l.λ
 
 (m::Flux.Recur)(pps::AbstractProbe...) = m.cell(m.state, pps...)
 
-function(l::Flux.RNNCell)(h, pp::AbstractProbe)
+(l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
+(l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
+
+function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
     wname, rname, bname = lname .* ("_W", "_R", "_B")
 
@@ -238,8 +241,8 @@ function(l::Flux.RNNCell)(h, pp::AbstractProbe)
         input=[name(pp), wname, rname, bname],
         output=[lname],
         name=lname,
-        attribute = push!(l.σ(ActivationAttributeProbe()), hsattrib),
-        op_type="RNN"))
+        attribute = push!(activation_attrib(l), hsattrib),
+        op_type=optype))
     # Flux weights are of shape [hidden_size, input_size]
     # ONNX wants them on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
     # To spice things up a bit, all julia arrays are saved in reverse order, i.e we need to create a TensorProto from an array with the arrangement [input_size, hidden_size, num_directions].
@@ -255,6 +258,9 @@ function(l::Flux.RNNCell)(h, pp::AbstractProbe)
 
     return newfrom(pp, lname)
 end
+
+activation_attrib(l) = l.σ(ActivationAttributeProbe())
+activation_attrib(l::Flux.LSTMCell) = ONNX.Proto.AttributeProto[] #Only default values supported by Flux
 
 Base.tanh(::ActivationAttributeProbe) = [ONNX.Proto.AttributeProto("activations", "Tanh")]
 Flux.elu(::ActivationAttributeProbe, α=1) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
