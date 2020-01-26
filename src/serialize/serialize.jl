@@ -123,6 +123,11 @@ function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
 end
 
 """
+    Used to get activation functions as [`ONNX.Proto.AttributeProto`](@ref)s.
+"""
+struct ActivationAttributeProbe end
+
+"""
     graphproto()
 
 Return an [`ONNX.Proto.GraphProto`](@ref) with all fields initialized to empty arrays.
@@ -219,6 +224,46 @@ function(l::Flux.BatchNorm)(pp::AbstractProbe)
     return newnamestrat(ppout, nextname(pp))
 end
 actfun(::FluxBatchNorm, l) = l.λ
+
+
+(m::Flux.Recur)(pps::AbstractProbe...) = m.cell(m.state, pps...)
+
+(l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
+(l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
+
+function recurrent_node(l, pp, optype)
+    lname = recursename(l, nextname(pp))
+    wname, rname, bname = lname .* ("_W", "_R", "_B")
+
+    hsattrib = ONNX.Proto.AttributeProto("hidden_size", size(l.Wh, 1))
+
+    add!(pp, ONNX.Proto.NodeProto(
+        input=[name(pp), wname, rname, bname],
+        output=[lname],
+        name=lname,
+        attribute = push!(activation_attrib(l), hsattrib),
+        op_type=optype))
+    # Flux weights are of shape [hidden_size, input_size]
+    # ONNX wants them on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
+    # To spice things up a bit, all julia arrays are saved in reverse order, i.e we need to create a TensorProto from an array with the arrangement [input_size, hidden_size, num_directions].
+    # First transpose the weights into [input_size, hidden_size], then reshape by adding 1 extra dimension
+    Wi = permutedims(l.Wi)
+    add!(pp, ONNX.Proto.TensorProto(reshape(Wi, size(Wi)...,1), wname))
+    Wh = permutedims(l.Wh)
+    add!(pp, ONNX.Proto.TensorProto(reshape(Wh, size(Wh)..., 1), rname))
+    # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
+    # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
+    b = reshape(l.b, :, 1)
+    add!(pp, ONNX.Proto.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
+
+    return newfrom(pp, lname)
+end
+
+activation_attrib(l) = l.σ(ActivationAttributeProbe())
+activation_attrib(l::Flux.LSTMCell) = ONNX.Proto.AttributeProto[] #Only default values supported by Flux
+
+Base.tanh(::ActivationAttributeProbe) = [ONNX.Proto.AttributeProto("activations", "Tanh")]
+Flux.elu(::ActivationAttributeProbe, α=1) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
 
 function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))

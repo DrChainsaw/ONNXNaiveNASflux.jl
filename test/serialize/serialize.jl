@@ -148,6 +148,42 @@
         end
 
         @testset "$(tc.layer) node" for tc in (
+            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(1:12), :, 4) .- 3),
+            (layer=LSTM(4, 3), indata = reshape(collect(1:12), 4, :) .- 3),
+            )
+            import NaiveNASflux: hiddenweights
+
+            inprobe = NodeProbe("input", genname)
+
+            outprobe = tc.layer(inprobe)
+
+            @test length(outprobe.protos) == 4
+
+            lp,wip,whp,bp = Tuple(outprobe.protos)
+
+            ln = serdeser(lp)
+            wi = serdeser(wip)
+            wh = serdeser(whp)
+            b = serdeser(bp)
+
+            res = fluxlayers[optype(ln)](ln.attribute, wi, wh, b)
+
+            @test size(weights(res)) == size(weights(tc.layer))
+            @test size(hiddenweights(res)) == size(hiddenweights(tc.layer))
+            @test size(bias(res)) == size(bias(res))
+
+            @test weights(res) ≈ weights(tc.layer)
+            @test hiddenweights(res) ≈ hiddenweights(tc.layer)
+            @test bias(res) ≈ bias(res)
+
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+        end
+
+        @testset "$(tc.layer) node" for tc in (
             (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
             )
 
@@ -373,7 +409,7 @@
             @test g_org(indata) ≈ g_new(indata)
         end
 
-        @testset "Dense graph with add + ActivationContribution" begin
+        @testset "Dense graph with add and layerfun" begin
             import ONNXmutable: create_vertex_default
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense(v0, 4, relu)
@@ -385,15 +421,23 @@
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=ActivationContribution))
+            callcnt = 0
+            struct CntSpy <: AbstractMutableComp
+                f
+            end
+            function (c::CntSpy)(x...)
+                callcnt += 1
+                return c.f(x...)
+            end
+            NaiveNASflux.layer(c::CntSpy) = layer(c.f)
+
+            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
 
             Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
-            for v in vertices(g_new)
-                @test sum(neuron_value(v)) > 0
-            end
+            @test callcnt == nv(g_new) - 1
         end
 
         @testset "Dense graph with cat" begin
@@ -406,7 +450,7 @@
             test_named_graph(CompGraph(v0, v4))
         end
 
-        @testset "Dense graph with cat + ActivationContribution" begin
+        @testset "Dense graph with cat and layerfun" begin
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense1", v0, 4, elu)
             v2 = dense("dense2", v0, 4)
@@ -418,15 +462,23 @@
             gp_org = graphproto(g_org)
             gt_new, sizes = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=ActivationContribution))
+            callcnt = 0
+            struct CntSpy <: AbstractMutableComp
+                f
+            end
+            function (c::CntSpy)(x...)
+                callcnt += 1
+                return c.f(x...)
+            end
+            NaiveNASflux.layer(c::CntSpy) = layer(c.f)
+
+            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
 
             Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
-            for v in vertices(g_new)
-                @test sum(neuron_value(v)) > 0
-            end
+            @test callcnt == nv(g_new) - 1
         end
 
         @testset "Conv and batchnorm graph with cat" begin
@@ -457,6 +509,15 @@
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             @test g_org(indata) ≈ g_new(indata)
+        end
+
+        @testset "RNN to LSTM" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = mutable("rnn", RNN(nout(v0), 4), v0)
+            v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
+            v3 = dense("dense", v2, 6, elu)
+
+            test_named_graph(CompGraph(v0, v2))
         end
 
         @testset "Graph two inputs two outputs" begin

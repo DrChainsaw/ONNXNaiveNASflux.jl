@@ -136,6 +136,12 @@ git-tree-sha1 = "463e8afad38899f27f90b781515ef1e5aadf78d5"
 [test_globalmaxpool_precomputed]
 git-tree-sha1 = "6d72b58370176351d46937ca3df65ba2fd114f04"
 
+[test_lstm_defaults]
+git-tree-sha1 = "c8b0d06dc9733222906bb6471c39a9c41270d149"
+
+[test_lstm_with_initial_bias]
+git-tree-sha1 = "19fe9305067a4225c6dd76264bb342cf966546ae"
+
 [test_maxpool_1d_default]
 git-tree-sha1 = "9b0a2b97518eb68122276b242313529582e4be95"
 
@@ -210,6 +216,9 @@ git-tree-sha1 = "a8f54fe04de7e810a2a4a4dcdcdc0147091f5b79"
 
 [test_reshape_zero_dim]
 git-tree-sha1 = "c3ca3149d2fb024446ca706710931d04174d2f88"
+
+[test_rnn_seq_length]
+git-tree-sha1 = "a8070179ed9c267210a80ebd883938c2b1450ff0"
 
 [test_selu]
 git-tree-sha1 = "70aa499c68927394657095b917ee030bf88afb59"

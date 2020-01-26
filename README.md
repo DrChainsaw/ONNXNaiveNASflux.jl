@@ -63,12 +63,15 @@ Dropout
 Elu
 Gemm
 GlobalAveragePool
+LSTM
 MaxPool
+RNN
 ReduceMean
 Relu
 Reshape
 Selu
 Squeeze
+Tanh
 ```
 
 ## Adding Operations

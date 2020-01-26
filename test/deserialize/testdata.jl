@@ -19,8 +19,7 @@ function prepare_node_test(name, ninputs, noutputs)
     return model, sizes, gb, inputs, outputs
 end
 
-#name = "test_conv_with_strides_padding"
-#location = https://github.com/onnx/onnx/tree/v1.6.0/onnx/backend/test/data/node/test_conv_with_strides_padding
+# Browsable link: https://github.com/onnx/onnx/tree/v1.6.0/onnx/backend/test/data/node
 function get_node_artifact(name, node=name; ninputs, noutputs, location = "https://raw.githubusercontent.com/onnx/onnx/v1.6.0/onnx/backend/test/data/node/")
     return get_artifact(name, joinpath(location, node), ninputs, noutputs)
 end
