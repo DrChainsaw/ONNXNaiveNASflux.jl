@@ -18,4 +18,7 @@ using Test
 
     @info "Test README examples"
     include("examples.jl")
+
+    @info "Test validation"
+    include("validate.jl")
 end

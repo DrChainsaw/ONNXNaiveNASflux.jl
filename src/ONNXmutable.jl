@@ -12,7 +12,7 @@ import Pkg
 export onnx
 
 include("shapes.jl")
-
+include("validate.jl")
 
 include("deserialize/ops.jl")
 include("deserialize/graphbuilder.jl")
