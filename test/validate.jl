@@ -1,6 +1,6 @@
 @testset "Validate" begin
     import ONNXmutable: modelproto, graphproto
-    import ONNXmutable: validate, uniqueoutput, optypedefined, outputused, inputused
+    import ONNXmutable: validate, uniqueoutput, optypedefined, outputused, inputused, hasname
     import ONNX: Proto.NodeProto, Proto.ValueInfoProto
 
     np(ins,outs,op="A") = NodeProto(input=ins, output=outs, op_type=op)
@@ -61,5 +61,14 @@
         @test_throws ErrorException inputused(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, "Found unused inputs: nf1, nf2") inputused(mp, s -> @warn s)
+    end
+
+    @testset "Graph has a name" begin
+        gp = ONNX.Proto.GraphProto(;node=NodeProto[],input=ValueInfoProto[], output=ValueInfoProto[])
+        mp = modelproto()
+        mp.graph = gp
+        @test_throws ErrorException hasname(mp)
+        @test_throws ErrorException validate(mp)
+        @test_logs (:warn, "Graph name not defined!") hasname(mp, s -> @warn s)
     end
 end

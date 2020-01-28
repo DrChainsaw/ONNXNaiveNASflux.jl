@@ -155,12 +155,14 @@ struct ActivationAttributeProbe end
 
 Return an [`ONNX.Proto.GraphProto`](@ref) with all fields initialized to empty arrays.
 """
-graphproto() = ONNX.Proto.GraphProto(
+graphproto(;name="", kwargs...) = ONNX.Proto.GraphProto(;
 node = ONNX.Proto.NodeProto[],
 initializer =  ONNX.Proto.TensorProto[],
 input =  ONNX.Proto.ValueInfoProto[],
 output =  ONNX.Proto.ValueInfoProto[],
-value_info =  ONNX.Proto.ValueInfoProto[]
+value_info =  ONNX.Proto.ValueInfoProto[],
+name=name,
+kwargs...
 )
 
 """

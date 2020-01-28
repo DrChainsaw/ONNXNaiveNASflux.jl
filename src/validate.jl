@@ -6,9 +6,9 @@
 
 Validate `mp`, throwing an exception if it is invalid.
 
-It is possible to specify the validation steps `fs` to perform. Default is `uniqueoutput, optypedefined, outputused, inputused`
+It is possible to specify the validation steps `fs` to perform. Default is `uniqueoutput, optypedefined, outputused, inputused, hasname`
 """
-validate(mp::ONNX.Proto.ModelProto, fs...=(uniqueoutput, optypedefined, outputused, inputused)...) = foreach(f -> f(mp), fs)
+validate(mp::ONNX.Proto.ModelProto, fs...=(uniqueoutput, optypedefined, outputused, inputused, hasname)...) = foreach(f -> f(mp), fs)
 
 """
     uniqueoutput(mp::ONNX.Proto.ModelProto, or=error)
@@ -80,3 +80,6 @@ function ioused(gp::ONNX.Proto.GraphProto)
 
     return found, used
 end
+
+hasname(mp::ONNX.Proto.ModelProto, or=error) = hasname(mp.graph, or)
+hasname(gp::ONNX.Proto.GraphProto, or=error) = isdefined(gp, :name) || or("Graph name not defined!")
