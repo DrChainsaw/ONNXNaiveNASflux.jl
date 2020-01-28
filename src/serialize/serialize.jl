@@ -288,7 +288,7 @@ activation_attrib(l) = l.σ(ActivationAttributeProbe())
 activation_attrib(l::Flux.LSTMCell) = ONNX.Proto.AttributeProto[] #Only default values supported by Flux
 
 Base.tanh(::ActivationAttributeProbe) = [ONNX.Proto.AttributeProto("activations", "Tanh")]
-Flux.elu(::ActivationAttributeProbe, α=1) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
+Flux.elu(::ActivationAttributeProbe, α=1f0) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
 
 function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))
@@ -302,7 +302,7 @@ function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.Attrib
 end
 
 Flux.relu(pp::AbstractProbe) = attribfun("Relu", pp)
-Flux.elu(pp::AbstractProbe, α=1) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
+Flux.elu(pp::AbstractProbe, α=1f0) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
 Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
 (l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
