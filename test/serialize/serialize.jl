@@ -213,7 +213,7 @@
     end
 
     @testset "Graphs" begin
-        import ONNXmutable: graphproto
+        import ONNXmutable: graphproto, modelproto, validate
 
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
         dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
@@ -228,6 +228,7 @@
 
         function test_named_graph(g_org, extradims = ())
             gp_org = graphproto(g_org)
+            validate(modelproto(;graph=gp_org))
             gt_new, sizes = serdeser(gp_org)
 
             g_new = CompGraph(gt_new, sizes)
