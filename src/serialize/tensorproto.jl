@@ -10,7 +10,7 @@ ONNX.Proto.ValueInfoProto(
         )
     )
 )
-ONNX.Proto.TensorShapeProto(shape) = ONNX.Proto.TensorShapeProto(dim=[tsp_d(s) for s in shape])
+ONNX.Proto.TensorShapeProto(shape) = ONNX.Proto.TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
 ONNX.Proto.TensorShapeProto(::Missing) = ONNX.Proto.TensorShapeProto()
 tsp_d(::Missing) = ONNX.Proto.TensorShapeProto_Dimension()
 tsp_d(n::Integer) = ONNX.Proto.TensorShapeProto_Dimension(dim_value=n)

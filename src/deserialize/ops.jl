@@ -192,7 +192,7 @@ end
 expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 
 verts[:Input] = function(name, inputs, params; kwargs...)
-    inshape = reverse(params[:size])
+    inshape = params[:size]
     indims = length(inshape)
     insize = indims > 0 ? inshape[max(1, actdim(indims))] : 1 # assume scalar
     return inputvertex(name, insize, guess_layertype(indims))

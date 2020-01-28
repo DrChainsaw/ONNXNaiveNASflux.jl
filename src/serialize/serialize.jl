@@ -146,7 +146,7 @@ add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
 function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
     push!(gp.initializer, tp)
-    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, tp.dims))
+    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, reverse(tp.dims)))
 end
 
 """
@@ -161,10 +161,10 @@ Return an [`ONNX.Proto.GraphProto`](@ref) with all fields initialized to empty a
 """
 graphproto(;kwargs...) = ONNX.Proto.GraphProto(;
 node = ONNX.Proto.NodeProto[],
-initializer =  ONNX.Proto.TensorProto[],
-input =  ONNX.Proto.ValueInfoProto[],
-output =  ONNX.Proto.ValueInfoProto[],
-value_info =  ONNX.Proto.ValueInfoProto[],
+initializer = ONNX.Proto.TensorProto[],
+input = ONNX.Proto.ValueInfoProto[],
+output = ONNX.Proto.ValueInfoProto[],
+value_info = ONNX.Proto.ValueInfoProto[],
 kwargs...
 )
 
