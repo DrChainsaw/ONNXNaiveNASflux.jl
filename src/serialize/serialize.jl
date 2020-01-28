@@ -7,7 +7,7 @@ Serialize the result of `modelproto(f, args...; kwargs...)` to a file with path 
 
 See [`modelproto`](@ref) for description of arguments.
 """
-onnx(filename::AbstractString, f, args...; kwargs...) = onnx(filename, modelproto(f, args...; kwargs...))
+onnx(filename::AbstractString, f, args...; modelname=filename, kwargs...) = onnx(filename, modelproto(f, args...; modelname=modelname, kwargs...))
 onnx(io::IO, f, args...; kwargs...) = onnx(io, modelproto(f, args...; kwargs...))
 
 """
@@ -23,12 +23,14 @@ onnx(io::IO, mp::ONNX.Proto.ModelProto) = ONNX.writeproto(io, mp)
 """
     modelproto(f; namestrat=name_runningnr(), posthook=validate, kwargs...)
     modelproto(f, inshapes::Tuple...; namestrat = name_runningnr(), posthook=validate, kwargs...)
-    modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), posthook=validate, kwargs...)
+    modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = name_runningnr(), posthook=validate, kwargs...)
 
 Return an [`ONNX.Proto.ModelProto`](@ref) from `f`.
 
-Argument `inshapes` are size tuples representing the shape of each input. An attempt to infer sizes will be made if not  provided.
+Argument `inshapes` are size tuples representing the shape of each input. An attempt to infer sizes will be made if not provided.
 Argument `indata` are pairs mapping names to size tuples. Names will be created automatically if not provided.
+
+Argument `modelname` is a string which will be used as the name of the model. Must be non-empty to be valid ONNX.
 
 Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
 
@@ -38,9 +40,10 @@ Other keyword arguments will be passed to `ONNX.Proto.ModelProto`.
 """
 modelproto(f; kwargs...) = modelproto(f, infer_inshapes(f)...; kwargs...)
 modelproto(f, inshapes::Union{Tuple, Missing}...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
-function modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), posthook=validate, kwargs...)
+function modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = name_runningnr(), posthook=validate, kwargs...)
     mp = modelproto(;kwargs...)
-    mp.graph = graphproto(f, indata...;namestrat=namestrat)
+    mp.graph = graphproto(f, indata...; namestrat=namestrat)
+    mp.graph.name=modelname
     posthook(mp)
     return mp
 end
@@ -58,9 +61,10 @@ Argument `posthook` will be called with the created `ONNX.Proto.ModelProto` as a
 
 Other keyword arguments will be passed to `ONNX.Proto.ModelProto`.
 """
-function modelproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g), posthook=validate, kwargs...)
+function modelproto(g::CompGraph; modelname="model", outshape = shape, namestrat=default_namestrat(g), posthook=validate, kwargs...)
     mp = modelproto(;kwargs...)
     mp.graph = graphproto(g, outshape, namestrat)
+    mp.graph.name = modelname
     posthook(mp)
     return mp
 end
@@ -155,13 +159,12 @@ struct ActivationAttributeProbe end
 
 Return an [`ONNX.Proto.GraphProto`](@ref) with all fields initialized to empty arrays.
 """
-graphproto(;name="", kwargs...) = ONNX.Proto.GraphProto(;
+graphproto(;kwargs...) = ONNX.Proto.GraphProto(;
 node = ONNX.Proto.NodeProto[],
 initializer =  ONNX.Proto.TensorProto[],
 input =  ONNX.Proto.ValueInfoProto[],
 output =  ONNX.Proto.ValueInfoProto[],
 value_info =  ONNX.Proto.ValueInfoProto[],
-name=name,
 kwargs...
 )
 

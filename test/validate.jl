@@ -70,5 +70,11 @@
         @test_throws ErrorException hasname(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, "Graph name not defined!") hasname(mp, s -> @warn s)
+
+        # Empty string is not valid either
+        gp.name = ""
+        @test_throws ErrorException hasname(mp)
+        @test_throws ErrorException validate(mp)
+        @test_logs (:warn, "Graph name is empty string!") hasname(mp, s -> @warn s)
     end
 end

@@ -82,4 +82,7 @@ function ioused(gp::ONNX.Proto.GraphProto)
 end
 
 hasname(mp::ONNX.Proto.ModelProto, or=error) = hasname(mp.graph, or)
-hasname(gp::ONNX.Proto.GraphProto, or=error) = isdefined(gp, :name) || or("Graph name not defined!")
+function hasname(gp::ONNX.Proto.GraphProto, or=error)
+     isdefined(gp, :name) || return or("Graph name not defined!")
+     isempty(gp.name) && or("Graph name is empty string!")
+ end

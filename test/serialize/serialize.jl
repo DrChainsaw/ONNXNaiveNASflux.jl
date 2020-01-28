@@ -228,6 +228,7 @@
 
         function test_named_graph(g_org, extradims = ())
             gp_org = graphproto(g_org)
+            gp_org.name="testmodel"
             validate(modelproto(;graph=gp_org))
             gt_new, sizes = serdeser(gp_org)
 
