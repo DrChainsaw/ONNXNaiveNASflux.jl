@@ -57,8 +57,12 @@ rnnactfuns[:Tanh] = (ind, params) -> tanh
 
 mrev(x) = x
 mrev(x::AbstractVector) = reverse(x)
+prev(x) = x
+prev(x::AbstractVector) = reverse!(reshape(permutedims(reshape(x, length(x) ÷ 2,:)),:))
 
-_akpsd(params) = get(params, :activation, identity), mrev(get(params, :kernel_shape, 1)), mrev(get(params, :pads, 0)), mrev(get(params, :strides, 1)), mrev(get(params, :dilations, 1))
+
+# mrev = maybe reverse. prev = rearrange padding, e.g. (1,2,1,2) => (2,2,1,1) or (1,2,3,1,2,3) => (3,3,2,2,1,1)
+_akpsd(params) = get(params, :activation, identity), mrev(get(params, :kernel_shape, 1)), prev(get(params, :pads, 0)), mrev(get(params, :strides, 1)), mrev(get(params, :dilations, 1))
 akpsd(params) = a2t.(_akpsd(params))
 a2t(x) = x
 a2t(a::AbstractArray) = Tuple(a)

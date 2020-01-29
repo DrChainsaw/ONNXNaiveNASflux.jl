@@ -234,12 +234,12 @@ actfun(::FluxDense, l) = l.σ
 actfun(::FluxConv, l) = l.σ
 
 attribs(l) = attribs(layertype(l), l)
-attribs(lt::FluxConvolutional{N}, l) where N = ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], expand_reverse.(Val.([2N, N, N]), [l.pad, l.stride, l.dilation]))
-attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], expand_reverse.(Val.([N, 2N, N]), [l.k, l.pad, l.stride]))
+attribs(lt::FluxConvolutional{N}, l) where N = ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
+attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"],  [reverse(l.k), padexpand(Val(N), l.pad), reverse(l.stride)])
 
-
-expand_reverse(::Val{N}, x::NTuple{M}) where {N,M} = mapreduce(xi -> [xi, xi], (a,b) -> vcat(b,a), x)
-expand_reverse(::Val{N}, x::NTuple{N}) where N = reverse(x)
+# Interleave padding! (1,2) => [2,1,2,1], (1,1,2,2,3,3) => (3,2,1,3,2,1)
+padexpand(::Val{N}, x::NTuple{N}) where N =  repeat(reverse(collect(x)), 2)
+padexpand(::Val{N}, x::NTuple{M}) where {N,M} = vcat(collect(x[end:-2:2]), collect(x[end-1:-2:1]))
 
 function(l::Flux.BatchNorm)(pp::AbstractProbe)
     lname = recursename(l, nextname(pp))
