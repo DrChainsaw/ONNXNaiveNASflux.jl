@@ -56,10 +56,12 @@ ONNX.Proto.AttributeProto(name::String, f::Float64) = ONNX.Proto.AttributeProto(
     f = Float32(f)
 )
 
-ONNX.Proto.AttributeProto(name::String, i::NTuple{N, Int64}) where N = ONNX.Proto.AttributeProto(
+ONNX.Proto.AttributeProto(name::String, i::NTuple{N, Int64}) where N = ONNX.Proto.AttributeProto(name, collect(i))
+
+ONNX.Proto.AttributeProto(name::String, i::AbstractVector{Int64}) where N = ONNX.Proto.AttributeProto(
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.INTS,
-    ints = collect(i)
+    ints = i
 )
 
 ONNX.Proto.AttributeProto(name::String, s::String) where N = ONNX.Proto.AttributeProto(

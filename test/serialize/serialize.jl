@@ -60,8 +60,11 @@
             @test res.op_type == string(tc.op)
             @test res.name == name(outprobe)
 
+            mexprev(v, x) = x
+            mexprev(v, x::Tuple) = reverse(x)
+            mexprev(::Val{:pads}, x::Tuple) = ONNXmutable.expand_reverse(Val(2*length(x)), x)
             for (k,v) in tc.attr
-                for (exp, act) in zip(v, res.attribute[k])
+                for (exp, act) in zip(mexprev(Val(k), v), res.attribute[k])
                     @test exp == act
                 end
             end

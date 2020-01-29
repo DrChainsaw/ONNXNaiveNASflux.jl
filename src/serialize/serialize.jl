@@ -230,8 +230,16 @@ end
 (l::Flux.Dense)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Gemm")
 actfun(::FluxDense, l) = l.σ
 
-(l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes= ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [l.pad, l.stride, l.dilation]))
+(l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
 actfun(::FluxConv, l) = l.σ
+
+attribs(l) = attribs(layertype(l), l)
+attribs(lt::FluxConvolutional{N}, l) where N = ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], expand_reverse.(Val.([2N, N, N]), [l.pad, l.stride, l.dilation]))
+attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], expand_reverse.(Val.([N, 2N, N]), [l.k, l.pad, l.stride]))
+
+
+expand_reverse(::Val{N}, x::NTuple{M}) where {N,M} = mapreduce(xi -> [xi, xi], (a,b) -> vcat(b,a), x)
+expand_reverse(::Val{N}, x::NTuple{N}) where N = reverse(x)
 
 function(l::Flux.BatchNorm)(pp::AbstractProbe)
     lname = recursename(l, nextname(pp))
@@ -308,8 +316,8 @@ Flux.relu(pp::AbstractProbe) = attribfun("Relu", pp)
 Flux.elu(pp::AbstractProbe, α=1f0) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
 Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
-(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
-(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun("AveragePool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
+(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = attribs(l))
+(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun("AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun("Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
 
 

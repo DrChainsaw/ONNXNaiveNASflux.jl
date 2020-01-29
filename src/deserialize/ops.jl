@@ -55,7 +55,10 @@ actfuns[:Tanh] = params -> tanh
 rnnactfuns[:Tanh] = (ind, params) -> tanh
 
 
-_akpsd(params) = get(params, :activation, identity), get(params, :kernel_shape, 1), get(params, :pads, 0), get(params, :strides, 1), get(params, :dilations, 1)
+mrev(x) = x
+mrev(x::AbstractVector) = reverse(x)
+
+_akpsd(params) = get(params, :activation, identity), mrev(get(params, :kernel_shape, 1)), mrev(get(params, :pads, 0)), mrev(get(params, :strides, 1)), mrev(get(params, :dilations, 1))
 akpsd(params) = a2t.(_akpsd(params))
 a2t(x) = x
 a2t(a::AbstractArray) = Tuple(a)
