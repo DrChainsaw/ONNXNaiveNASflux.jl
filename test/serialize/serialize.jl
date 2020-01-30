@@ -60,8 +60,11 @@
             @test res.op_type == string(tc.op)
             @test res.name == name(outprobe)
 
+            mexprev(v, x) = x
+            mexprev(v, x::Tuple) = reverse(x)
+            mexprev(::Val{:pads}, x::Tuple) = ONNXmutable.padexpand(Val(length(x)), x)
             for (k,v) in tc.attr
-                for (exp, act) in zip(v, res.attribute[k])
+                for (exp, act) in zip(mexprev(Val(k), v), res.attribute[k])
                     @test exp == act
                 end
             end
@@ -115,9 +118,21 @@
             @test collect(skipmissing(shapeout)) == [:A, 3, 2]
         end
 
+        @testset "Pad expand" begin
+            import ONNXmutable: padexpand
+            @test padexpand(Val(1), (1,)) == [1,1]
+            @test padexpand(Val(2), (1,2)) == [2,1,2,1]
+            @test padexpand(Val(3), (1,2,3)) == [3,2,1,3,2,1]
+
+            @test padexpand(Val(1), (1,2)) == [2,1]
+            @test padexpand(Val(2), (1,2,3,4)) == [4,2,3,1]
+            @test padexpand(Val(3), (1,2,3,4,5,6)) == [6,4,2,5,3,1]
+        end
+
         @testset "$(tc.layer) node" for tc in (
             (layer=Dense(3,4, relu), indata=reshape(collect(1:12), :, 4) .- 3),
             (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
+            (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)
@@ -213,7 +228,7 @@
     end
 
     @testset "Graphs" begin
-        import ONNXmutable: graphproto
+        import ONNXmutable: graphproto, modelproto, validate
 
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
         dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
@@ -228,6 +243,8 @@
 
         function test_named_graph(g_org, extradims = ())
             gp_org = graphproto(g_org)
+            gp_org.name="testmodel"
+            validate(modelproto(;graph=gp_org))
             gt_new, sizes = serdeser(gp_org)
 
             g_new = CompGraph(gt_new, sizes)

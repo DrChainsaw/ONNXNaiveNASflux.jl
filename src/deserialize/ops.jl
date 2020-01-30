@@ -55,7 +55,14 @@ actfuns[:Tanh] = params -> tanh
 rnnactfuns[:Tanh] = (ind, params) -> tanh
 
 
-_akpsd(params) = get(params, :activation, identity), get(params, :kernel_shape, 1), get(params, :pads, 0), get(params, :strides, 1), get(params, :dilations, 1)
+mrev(x) = x
+mrev(x::AbstractVector) = reverse(x)
+prev(x) = x
+prev(x::AbstractVector) = reverse!(reshape(permutedims(reshape(x, length(x) ÷ 2,:)),:))
+
+
+# mrev = maybe reverse. prev = rearrange padding, e.g. (1,2,1,2) => (2,2,1,1) or (1,2,3,1,2,3) => (3,3,2,2,1,1)
+_akpsd(params) = get(params, :activation, identity), mrev(get(params, :kernel_shape, 1)), prev(get(params, :pads, 0)), mrev(get(params, :strides, 1)), mrev(get(params, :dilations, 1))
 akpsd(params) = a2t.(_akpsd(params))
 a2t(x) = x
 a2t(a::AbstractArray) = Tuple(a)
@@ -192,7 +199,7 @@ end
 expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 
 verts[:Input] = function(name, inputs, params; kwargs...)
-    inshape = reverse(params[:size])
+    inshape = params[:size]
     indims = length(inshape)
     insize = indims > 0 ? inshape[max(1, actdim(indims))] : 1 # assume scalar
     return inputvertex(name, insize, guess_layertype(indims))

@@ -35,9 +35,8 @@
 
         @test name == "test"
         @test length(vsize) == length(s)
-
         if !isempty(s)
-            @test vsize[findall(!ismissing, reverse(s))] == reverse(Tuple(skipmissing(s)))
+            @test vsize[findall(!ismissing, s)] == Tuple(skipmissing(s))
         end
     end
 end

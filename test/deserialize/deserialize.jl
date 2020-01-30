@@ -1,6 +1,15 @@
 import ONNXmutable: fluxlayers, actfuns, invariantops, optype, params
 using NaiveNASflux
 
+@testset "Read padding" begin
+    import ONNXmutable: prev
+
+    @test prev(2) == 2
+    @test prev([1,2]) == [2,1]
+    @test prev([1,2,3,4]) == [4,2,3,1]
+    @test prev([1,2,3,4,5,6]) == [6,3,5,2,4,1]
+end
+
 # For testing since ONNX states that recurrent layers take 3D input while flux uses
 # an Array of 2D Arrays
 function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T

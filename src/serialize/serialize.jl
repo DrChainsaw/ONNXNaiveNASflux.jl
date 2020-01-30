@@ -1,44 +1,71 @@
 
+"""
+    onnx(filename::AbstractString, f, args...; kwargs...)
+    onnx(io::IO, f, args...; kwargs...)
 
-onnx(filename::AbstractString, f, args...; kwargs...) = onnx(filename, modelproto(f, args...; kwargs...))
+Serialize the result of `modelproto(f, args...; kwargs...)` to a file with path `filename` or to `io`.
+
+See [`modelproto`](@ref) for description of arguments.
+"""
+onnx(filename::AbstractString, f, args...; modelname=filename, kwargs...) = onnx(filename, modelproto(f, args...; modelname=modelname, kwargs...))
 onnx(io::IO, f, args...; kwargs...) = onnx(io, modelproto(f, args...; kwargs...))
 
+"""
+    onnx(filename::AbstractString, mp::ONNX.Proto.ModelProto)
+    onnx(io::IO, mp::ONNX.Proto.ModelProto)
+
+Serialize the given [`ONNX.Proto.ModelProto`](@ref) to a file with path `filename` or to `io`.
+"""
 onnx(filename::AbstractString, mp::ONNX.Proto.ModelProto) = open(io -> onnx(io, mp), filename, "w")
 onnx(io::IO, mp::ONNX.Proto.ModelProto) = ONNX.writeproto(io, mp)
 
 
 """
-    modelproto(f; namestrat=name_runningnr(), kwargs...)
-    modelproto(f, inshapes::Tuple...; namestrat = name_runningnr()kwargs...)
-    modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
+    modelproto(f; namestrat=name_runningnr(), posthook=validate, kwargs...)
+    modelproto(f, inshapes::Tuple...; namestrat = name_runningnr(), posthook=validate, kwargs...)
+    modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = name_runningnr(), posthook=validate, kwargs...)
 
 Return an [`ONNX.Proto.ModelProto`](@ref) from `f`.
 
-Argument `inshapes` are size tuples representing the shape of each input. An attempt to infer sizes will be made if not  provided.
+Argument `inshapes` are size tuples representing the shape of each input. An attempt to infer sizes will be made if not provided.
 Argument `indata` are pairs mapping names to size tuples. Names will be created automatically if not provided.
 
+Argument `modelname` is a string which will be used as the name of the model. Must be non-empty to be valid ONNX.
+
 Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
+
+Argument `posthook` will be called with the created `ONNX.Proto.ModelProto` as argument before returning it.
+
+Other keyword arguments will be passed to `ONNX.Proto.ModelProto`.
 """
 modelproto(f; kwargs...) = modelproto(f, infer_inshapes(f)...; kwargs...)
 modelproto(f, inshapes::Union{Tuple, Missing}...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
-function modelproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
+function modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = name_runningnr(), posthook=validate, kwargs...)
     mp = modelproto(;kwargs...)
-    mp.graph = graphproto(f, indata...;namestrat=namestrat)
+    mp.graph = graphproto(f, indata...; namestrat=namestrat)
+    mp.graph.name=modelname
+    posthook(mp)
     return mp
 end
 
 """
-    modelproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g))
+    modelproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g); , posthook=validate, kwargs...)
 
 Return an [`ONNX.Proto.ModelProto`](@ref) from `g`.
 
 Argument `outshape` is a function which returns a size tuple representing the shape of the output of a given `AbstractVertex`.
 
 Argument `namestrat` determines how nodes in the graph shall be named. Other keyword arguments are passed to the `ModelProto`.
+
+Argument `posthook` will be called with the created `ONNX.Proto.ModelProto` as argument before returning it.
+
+Other keyword arguments will be passed to `ONNX.Proto.ModelProto`.
 """
-function modelproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g), kwargs...)
+function modelproto(g::CompGraph; modelname="model", outshape = shape, namestrat=default_namestrat(g), posthook=validate, kwargs...)
     mp = modelproto(;kwargs...)
     mp.graph = graphproto(g, outshape, namestrat)
+    mp.graph.name = modelname
+    posthook(mp)
     return mp
 end
 
@@ -52,8 +79,8 @@ end
 infer_shape(::Type{<:Any}) = missing
 infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
 
-modelproto(;kwargs...) = ONNX.Proto.ModelProto(
-    ir_version=ONNX.Proto.Version.IR_VERSION,
+modelproto(;kwargs...) = ONNX.Proto.ModelProto(;
+    ir_version=6,
     opset_import=[ONNX.Proto.OperatorSetIdProto(version=12)],
     producer_name="ONNXmutable.jl",
     producer_version=string(Pkg.Types.Context().env.project.version), # TODO: Ugh....
@@ -119,7 +146,7 @@ add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
 function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
     push!(gp.initializer, tp)
-    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, tp.dims))
+    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, reverse(tp.dims)))
 end
 
 """
@@ -132,12 +159,13 @@ struct ActivationAttributeProbe end
 
 Return an [`ONNX.Proto.GraphProto`](@ref) with all fields initialized to empty arrays.
 """
-graphproto() = ONNX.Proto.GraphProto(
+graphproto(;kwargs...) = ONNX.Proto.GraphProto(;
 node = ONNX.Proto.NodeProto[],
-initializer =  ONNX.Proto.TensorProto[],
-input =  ONNX.Proto.ValueInfoProto[],
-output =  ONNX.Proto.ValueInfoProto[],
-value_info =  ONNX.Proto.ValueInfoProto[]
+initializer = ONNX.Proto.TensorProto[],
+input = ONNX.Proto.ValueInfoProto[],
+output = ONNX.Proto.ValueInfoProto[],
+value_info = ONNX.Proto.ValueInfoProto[],
+kwargs...
 )
 
 """
@@ -202,8 +230,16 @@ end
 (l::Flux.Dense)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Gemm")
 actfun(::FluxDense, l) = l.σ
 
-(l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes= ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [l.pad, l.stride, l.dilation]))
+(l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
 actfun(::FluxConv, l) = l.σ
+
+attribs(l) = attribs(layertype(l), l)
+attribs(lt::FluxConvolutional{N}, l) where N = ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
+attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"],  [reverse(l.k), padexpand(Val(N), l.pad), reverse(l.stride)])
+
+# Interleave padding! (1,2) => [2,1,2,1], (1,1,2,2,3,3) => (3,2,1,3,2,1)
+padexpand(::Val{N}, x::NTuple{N}) where N =  repeat(reverse(collect(x)), 2)
+padexpand(::Val{N}, x::NTuple{M}) where {N,M} = vcat(collect(x[end:-2:2]), collect(x[end-1:-2:1]))
 
 function(l::Flux.BatchNorm)(pp::AbstractProbe)
     lname = recursename(l, nextname(pp))
@@ -263,7 +299,7 @@ activation_attrib(l) = l.σ(ActivationAttributeProbe())
 activation_attrib(l::Flux.LSTMCell) = ONNX.Proto.AttributeProto[] #Only default values supported by Flux
 
 Base.tanh(::ActivationAttributeProbe) = [ONNX.Proto.AttributeProto("activations", "Tanh")]
-Flux.elu(::ActivationAttributeProbe, α=1) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
+Flux.elu(::ActivationAttributeProbe, α=1f0) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
 
 function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))
@@ -277,11 +313,11 @@ function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.Attrib
 end
 
 Flux.relu(pp::AbstractProbe) = attribfun("Relu", pp)
-Flux.elu(pp::AbstractProbe, α=1) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
+Flux.elu(pp::AbstractProbe, α=1f0) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
 Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
-(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
-(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun("AveragePool", pp; attributes = ONNX.Proto.AttributeProto.(["kernel_shape", "pads", "strides"], [l.k, l.pad, l.stride]))
+(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = attribs(l))
+(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun("AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun("Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
 
 
