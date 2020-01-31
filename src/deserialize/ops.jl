@@ -58,7 +58,7 @@ rnnactfuns[:Tanh] = (ind, params) -> tanh
 mrev(x) = x
 mrev(x::AbstractVector) = reverse(x)
 prev(x) = x
-prev(x::AbstractVector) = reverse!(reshape(permutedims(reshape(x, length(x) ÷ 2,:)),:))
+prev(x::AbstractVector) = reshape(permutedims(reverse(reshape(x, length(x) ÷ 2,:);dims=1)),:)
 
 
 # mrev = maybe reverse. prev = rearrange padding, e.g. (1,2,1,2) => (2,2,1,1) or (1,2,3,1,2,3) => (3,3,2,2,1,1)
@@ -70,7 +70,7 @@ a2t(a::AbstractArray) = Tuple(a)
 actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxConv{N-2}())))) where {T, N}
     a,_,p,s,d = akpsd(params)
     @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
-    return Conv(weight, bias, a, pad=p, stride=s, dilation=d)
+    return Conv(flipweights(FluxConv{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
 end
 
 actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxDense())))) where {T,N}

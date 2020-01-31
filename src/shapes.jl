@@ -31,3 +31,6 @@ function guess_layertype(ndims)
     ndims == 2 && return FluxDense()
     return FluxConv{ndims-2}()
 end
+
+flipweights(l, w) = w
+flipweights(::FluxConvolutional{N}, w) where N = w[(size(w,i):-1:1 for i in 1:N)..., :, :]

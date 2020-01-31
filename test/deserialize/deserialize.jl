@@ -5,9 +5,9 @@ using NaiveNASflux
     import ONNXmutable: prev
 
     @test prev(2) == 2
-    @test prev([1,2]) == [2,1]
-    @test prev([1,2,3,4]) == [4,2,3,1]
-    @test prev([1,2,3,4,5,6]) == [6,3,5,2,4,1]
+    @test prev([1,2]) == [1,2]
+    @test prev([1,2,3,4]) == [2,4,1,3]
+    @test prev([1,2,3,4,5,6]) == [3,6,2,5,1,4]
 end
 
 # For testing since ONNX states that recurrent layers take 3D input while flux uses
@@ -38,7 +38,7 @@ end
     (name="test_basic_conv_without_padding", ninputs=2, noutputs=1),
     (name="test_batchnorm_epsilon", ninputs=5, noutputs=1),
     (name="test_batchnorm_example", ninputs=5, noutputs=1),
-    #(name="test_conv_with_strides_and_asymmetric_padding", ninputs=2, noutputs=1), Not supported!
+    (name="test_conv_with_strides_and_asymmetric_padding", ninputs=2, noutputs=1),
     (name="test_conv_with_strides_no_padding", ninputs=2, noutputs=1),
     (name="test_conv_with_strides_padding", ninputs=2, noutputs=1),
     (name="test_dropout_default", ninputs=1, noutputs=1),
@@ -65,7 +65,7 @@ end
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
-     (name="test_rnn_seq_length", ninputs=4, noutputs=1),
+    (name="test_rnn_seq_length", ninputs=4, noutputs=1),
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)

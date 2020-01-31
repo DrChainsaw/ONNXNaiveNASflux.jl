@@ -16,9 +16,9 @@ using Test
         include("serialize/serialize.jl")
     end
 
-    @info "Test README examples"
-    include("examples.jl")
-
     @info "Test validation"
     include("validate.jl")
+
+    @info "Test README examples"
+    include("examples.jl")
 end

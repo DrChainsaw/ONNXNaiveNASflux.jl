@@ -220,7 +220,7 @@ function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.Att
         name=lname,
         attribute = attributes,
         op_type=optype))
-    add!(pp, ONNX.Proto.TensorProto(weights(l), wname))
+    add!(pp, ONNX.Proto.TensorProto(flipweights(lt, weights(l)), wname))
     add!(pp, ONNX.Proto.TensorProto(bias(l), bname))
 
     ppout = actfun(lt, l)(newnamestrat(pp, f -> join([lname, genname(f)], "_"), lname))
@@ -239,7 +239,7 @@ attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.Proto.AttributeProto.(
 
 # Interleave padding! (1,2) => [2,1,2,1], (1,1,2,2,3,3) => (3,2,1,3,2,1)
 padexpand(::Val{N}, x::NTuple{N}) where N =  repeat(reverse(collect(x)), 2)
-padexpand(::Val{N}, x::NTuple{M}) where {N,M} = vcat(collect(x[end:-2:2]), collect(x[end-1:-2:1]))
+padexpand(::Val{N}, x::NTuple{M}) where {N,M} = vcat(collect(x[end-1:-2:1]), collect(x[end:-2:2]))
 
 function(l::Flux.BatchNorm)(pp::AbstractProbe)
     lname = recursename(l, nextname(pp))

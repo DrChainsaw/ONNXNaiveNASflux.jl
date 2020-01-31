@@ -17,6 +17,8 @@
     cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
     cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
 
+    include("onnxruntime.jl")
+
     @testset "Nodes" begin
         using Statistics
         import ONNXmutable: optype, actfuns, fluxlayers, invariantops
@@ -124,15 +126,15 @@
             @test padexpand(Val(2), (1,2)) == [2,1,2,1]
             @test padexpand(Val(3), (1,2,3)) == [3,2,1,3,2,1]
 
-            @test padexpand(Val(1), (1,2)) == [2,1]
-            @test padexpand(Val(2), (1,2,3,4)) == [4,2,3,1]
-            @test padexpand(Val(3), (1,2,3,4,5,6)) == [6,4,2,5,3,1]
+            @test padexpand(Val(1), (1,2)) == [1,2]
+            @test padexpand(Val(2), (1,2,3,4)) == [3,1,4,2]
+            @test padexpand(Val(3), (1,2,3,4,5,6)) == [5,3,1,6,4,2]
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=Dense(3,4, relu), indata=reshape(collect(1:12), :, 4) .- 3),
-            (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
-            (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
+            (layer=Dense(3,4, relu), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
+            (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:3*9*9), 9,9,3,1) .- 10),
+            (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:3*9*9), 9,9,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)
@@ -151,7 +153,7 @@
             @test size(w) == size(weights(tc.layer))
             @test size(b) == size(bias(tc.layer))
 
-            @test w ≈ weights(tc.layer)
+            @test w ≈ ONNXmutable.flipweights(layertype(tc.layer), weights(tc.layer))
             @test b ≈ bias(tc.layer)
 
             ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
@@ -160,6 +162,9 @@
             @test string(res) == string(tc.layer)
 
             @test res(tc.indata) ≈ tc.layer(tc.indata)
+
+            ortout, = onnxruntime_infer(tc.layer, tc.indata)
+            @test ortout ≈ tc.layer(tc.indata)
         end
 
         @testset "$(tc.layer) node" for tc in (
