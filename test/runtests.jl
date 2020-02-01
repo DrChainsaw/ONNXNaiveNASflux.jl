@@ -12,7 +12,7 @@ using Test
     @info "Test Serialization"
     @testset "Serialize" begin
         import ONNX
-        include("serialize/tensorproto.jl")
+        include("serialize/protos.jl")
         include("serialize/serialize.jl")
     end
 

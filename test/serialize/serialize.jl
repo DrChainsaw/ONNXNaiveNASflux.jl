@@ -161,15 +161,20 @@
 
             @test string(res) == string(tc.layer)
 
-            @test res(tc.indata) ≈ tc.layer(tc.indata)
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
 
             ortout, = onnxruntime_infer(tc.layer, tc.indata)
-            @test ortout ≈ tc.layer(tc.indata)
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(1:12), :, 4) .- 3),
-            (layer=LSTM(4, 3), indata = reshape(collect(1:12), 4, :) .- 3),
+            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
+            (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
             )
             import NaiveNASflux: hiddenweights
 
@@ -188,6 +193,7 @@
 
             res = fluxlayers[optype(ln)](ln.attribute, wi, wh, b)
 
+            lt = layertype(tc.layer)
             @test size(weights(res)) == size(weights(tc.layer))
             @test size(hiddenweights(res)) == size(hiddenweights(tc.layer))
             @test size(bias(res)) == size(bias(res))
@@ -201,6 +207,11 @@
 
             @test size(resout) == size(expout)
             @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, reshape(tc.indata,size(tc.indata)...,1))
+            ortout = dropdims(ortout; dims=(3,4))
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
         end
 
         @testset "$(tc.layer) node" for tc in (

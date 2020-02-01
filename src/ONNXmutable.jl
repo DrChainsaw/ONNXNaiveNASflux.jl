@@ -19,7 +19,7 @@ include("deserialize/graphbuilder.jl")
 include("deserialize/deserialize.jl")
 
 include("serialize/namingutil.jl")
-include("serialize/tensorproto.jl")
+include("serialize/protos.jl")
 include("serialize/serialize.jl")
 
 end # module

@@ -34,3 +34,20 @@ end
 
 flipweights(l, w) = w
 flipweights(::FluxConvolutional{N}, w) where N = w[(size(w,i):-1:1 for i in 1:N)..., :, :]
+flipweights(::FluxRnn, w, hsize) = w
+function flipweights(::FluxLstm, w, hsize)
+    input = Flux.gate(w, hsize, 1)
+    forget = Flux.gate(w, hsize, 2)
+    cell = Flux.gate(w, hsize, 3)
+    output = Flux.gate(w, hsize, 4)
+    return vcat(input, output, forget, cell)
+end
+
+unflipweights(::FluxRnn, w, hsize) = w
+function unflipweights(::FluxLstm, w, hsize)
+    input = Flux.gate(w, hsize, 1)
+    output = Flux.gate(w, hsize, 2)
+    forget = Flux.gate(w, hsize, 3)
+    cell = Flux.gate(w, hsize, 4)
+    return vcat(input, forget, cell, output)
+end

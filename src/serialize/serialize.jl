@@ -81,13 +81,10 @@ infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
 
 modelproto(;kwargs...) = ONNX.Proto.ModelProto(;
     ir_version=6,
-    opset_import=[ONNX.Proto.OperatorSetIdProto(version=12)],
+    opset_import=[ONNX.Proto.OperatorSetIdProto(version=11)],
     producer_name="ONNXmutable.jl",
     producer_version=string(Pkg.Types.Context().env.project.version), # TODO: Ugh....
     kwargs...)
-
-
-
 
 """
     AbstractProbe
@@ -267,11 +264,15 @@ actfun(::FluxBatchNorm, l) = l.λ
 (l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
 (l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
 
+NaiveNASflux.layertype(::Flux.RNNCell) = FluxRnn()
+NaiveNASflux.layertype(::Flux.LSTMCell) = FluxLstm()
+
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
     wname, rname, bname = lname .* ("_W", "_R", "_B")
 
-    hsattrib = ONNX.Proto.AttributeProto("hidden_size", size(l.Wh, 1))
+    hsize = size(l.Wh, 2)
+    hsattrib = ONNX.Proto.AttributeProto("hidden_size", hsize)
 
     add!(pp, ONNX.Proto.NodeProto(
         input=[name(pp), wname, rname, bname],
@@ -283,23 +284,28 @@ function recurrent_node(l, pp, optype)
     # ONNX wants them on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
     # To spice things up a bit, all julia arrays are saved in reverse order, i.e we need to create a TensorProto from an array with the arrangement [input_size, hidden_size, num_directions].
     # First transpose the weights into [input_size, hidden_size], then reshape by adding 1 extra dimension
-    Wi = permutedims(l.Wi)
+    Wi = permutedims(flipweights(layertype(l), l.Wi, hsize))
     add!(pp, ONNX.Proto.TensorProto(reshape(Wi, size(Wi)...,1), wname))
-    Wh = permutedims(l.Wh)
+    Wh = permutedims(flipweights(layertype(l), l.Wh, hsize))
     add!(pp, ONNX.Proto.TensorProto(reshape(Wh, size(Wh)..., 1), rname))
     # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
     # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
-    b = reshape(l.b, :, 1)
+    b = flipweights(layertype(l), reshape(l.b, :, 1), hsize)
     add!(pp, ONNX.Proto.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
 
-    return newfrom(pp, lname)
+    # ONNX wants num directions as an extra dimension to output
+    return newfrom(pp, lname, s -> (s[1:end-1]..., 1, s[end]))
 end
+
 
 activation_attrib(l) = l.σ(ActivationAttributeProbe())
 activation_attrib(l::Flux.LSTMCell) = ONNX.Proto.AttributeProto[] #Only default values supported by Flux
 
-Base.tanh(::ActivationAttributeProbe) = [ONNX.Proto.AttributeProto("activations", "Tanh")]
-Flux.elu(::ActivationAttributeProbe, α=1f0) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha"], ["Elu", α])
+Base.tanh(::ActivationAttributeProbe) = rnnactattribs("Tanh")
+Flux.elu(::ActivationAttributeProbe, α=1f0) = rnnactattribs("Elu", α)
+
+rnnactattribs(op::AbstractString, α=0f0, β=0f0) = rnnactattribs([op], [α], [β])
+rnnactattribs(ops::AbstractVector, αs, βs) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha", "activation_beta"], [ops, αs, βs])
 
 function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))
