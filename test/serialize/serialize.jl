@@ -212,7 +212,7 @@
 
             ortout, = onnxruntime_infer(tc.layer, reshape(tc.indata,size(tc.indata)...,1))
             ortout = dropdims(ortout; dims=3)
-            
+
             @test size(ortout) == size(expout)
             @test ortout ≈ expout
         end
@@ -575,9 +575,12 @@
             v0 = inputvertex("input", 3, FluxRnn())
             v1 = mutable("rnn", RNN(nout(v0), 4), v0)
             v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
-            #v3 = dense("dense", v2, 6, elu) TODO!!
 
             test_named_graph(CompGraph(v0, v2))
+
+            #TODO!
+            # v3 = dense("dense", v2, 6, elu)
+            # test_named_graph(CompGraph(v0, v3))
         end
 
         @testset "Graph two inputs two outputs" begin

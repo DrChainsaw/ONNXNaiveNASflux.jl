@@ -21,14 +21,15 @@ shape(::FluxLayer, outsize) = missing
 shape(::Shape1D, outsize) = (outsize,)
 shape(::FluxDense, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
-shape(::FluxRecurrent, outsize) = (missing, outsize, missing)
+shape(::FluxRecurrent, outsize) = (outsize, missing, missing)
 
 rmdims(t::Tuple, dim::Integer) = t[1:end .!= dim]
 rmdims(t::Tuple, dims) = Tuple(t[i] for i in 1:length(t) if i ∉ dims)
 
-function guess_layertype(ndims)
+function guess_layertype(ndims::Integer)
     ndims <= 1 && return Shape1D()
     ndims == 2 && return FluxDense()
+    ndims == 3 && return FluxRnn()
     return FluxConv{ndims-2}()
 end
 

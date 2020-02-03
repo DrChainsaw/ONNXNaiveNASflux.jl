@@ -17,6 +17,7 @@ tsp_d(n::Integer) = ONNX.Proto.TensorShapeProto_Dimension(dim_value=n)
 tsp_d(s::String) = ONNX.Proto.TensorShapeProto_Dimension(dim_param=s)
 tsp_d(s::Symbol) = tsp_d(string(s))
 
+tp_tensor_elemtype(i::Integer) = i
 tp_tensor_elemtype(::Missing) = ONNX.Proto.TensorProto_DataType.UNDEFINED
 tp_tensor_elemtype(::Type{Float32}) = ONNX.Proto.TensorProto_DataType.FLOAT
 

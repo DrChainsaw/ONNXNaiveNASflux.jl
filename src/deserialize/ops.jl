@@ -203,8 +203,9 @@ expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     indims = length(inshape)
-    insize = indims > 0 ? inshape[max(1, actdim(indims))] : 1 # assume scalar
-    return inputvertex(name, insize, guess_layertype(indims))
+    ltype = guess_layertype(indims)
+    insize = indims > 0 ? inshape[max(1, actdim(ltype))] : 1 # assume scalar
+    return inputvertex(name, insize, ltype)
 end
 
 verts[:Add] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)

@@ -40,23 +40,21 @@ function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes, vfun = create_vertex_
 end
 
 NaiveNASlib.name(vi::ONNX.Types.ValueInfo) = vi.name
-#name(n::ONNX.Types.Node) = n.name
 NaiveNASlib.inputs(n::ONNX.Types.Node) = n.input
 NaiveNASlib.outputs(n::ONNX.Types.Node) = n.output
 optype(n::ONNX.Types.Node) = Symbol(n.op_type)
 
 """
-   vertex(gb::CompGraphBuilder, n::ONNX.Types.Node)::AbstractVertex
+   vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
 
 Return an `AbstractVertex` created from `n`.
 
 Inputs to the returned vertex are created recursively based on state in `gb`.
 """
-function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)::AbstractVertex
+function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
       return get!(gb.created, n) do
          n_create, ins = check_combine(gb, n)
          invertices = map(ni -> vertex(gb, ni, vfun), ins)
-         # TODO: Let user supply this...
          v = vfun(gb, n_create, invertices)
          if isempty(nin(v))
             push!(gb.inputs, v)
@@ -104,7 +102,11 @@ function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
       end
    end
 
+   #Case 4: Reshape between Recurrent to Dense
+   # Reason is that Flux recurrent layers take 2D inputs just like dense layers so reshapes can be ignored
+   # TODO!
+
    return n, ins
 end
 
-create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array{<:AbstractVertex}; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)
+create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)

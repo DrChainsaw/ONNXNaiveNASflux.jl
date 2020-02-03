@@ -143,7 +143,7 @@ add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
 function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
     push!(gp.initializer, tp)
-    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, reverse(tp.dims)))
+    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, reverse(tp.dims), tp.data_type))
 end
 
 """
@@ -230,7 +230,7 @@ function(l::Flux.Dense)(pp::AbstractProbe)
         # Special case: Recurrent -> Dense. This is nothing special in flux as recurrent layers do 2D -> 2D
         # For it to be valid ONNX we need to add an extra reshape
         outsize = shape(pp)[1]
-        pp = reshape(pp, ismissing(outsize) ? 0 : outsize, :)
+        pp = reshape(pp, nin(l), :)
     end
     return weightlayer(layertype(l), l, pp, "Gemm")
 end
