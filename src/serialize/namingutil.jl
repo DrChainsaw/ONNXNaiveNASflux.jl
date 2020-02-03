@@ -1,5 +1,6 @@
 
 
+default_namestrat(f) = name_runningnr()
 default_namestrat(g::CompGraph) = default_namestrat(vertices(g))
 function default_namestrat(vs::AbstractVector{<:AbstractVertex})
     # Even if all vertices have unique names, we can't be certain that no vertex produces more than one node

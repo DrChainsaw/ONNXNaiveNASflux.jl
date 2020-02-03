@@ -94,6 +94,16 @@ function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
       end
    end
 
+   # Case 3: Recurrent layers followed by Squeeze
+   # Reason is that ONNX specifies that recurrent layers output tensors of shape [seq_length, num_directions, batch_size, hidden_size] where num_directions is 2 in case of bidirectional and 1 otherwise.
+   # Flux recurrent layers do not have the num_directions dimension so we must ignore the Squeeze
+   # What if the extra dimension is needed? Probably solveable by adding a custom attribute but I would need a testable example or else it will just be buggy.
+   if optype(n) == :Squeeze
+      if length(ins) == 1 && optype(ins[1]) in keys(fluxrecurrentlayers)
+         return ins[1], innodes(ins[1], gb)
+      end
+   end
+
    return n, ins
 end
 

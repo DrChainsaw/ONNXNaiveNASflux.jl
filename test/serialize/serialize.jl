@@ -136,6 +136,7 @@
             (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:3*9*9), 9,9,3,1) .- 10),
             (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:3*9*9), 9,9,3,1) .- 10),
             )
+            ONNXmutable.shape(p::NodeProbe) = missing
 
             inprobe = NodeProbe("input", genname)
 
@@ -178,11 +179,12 @@
             )
             import NaiveNASflux: hiddenweights
 
+            ONNXmutable.shape(p::NodeProbe) = (missing, nout(tc.layer), missing)
             inprobe = NodeProbe("input", genname)
 
             outprobe = tc.layer(inprobe)
 
-            @test length(outprobe.protos) == 4
+            @test length(outprobe.protos) == 5
 
             lp,wip,whp,bp = Tuple(outprobe.protos)
 
@@ -209,13 +211,14 @@
             @test resout ≈ expout
 
             ortout, = onnxruntime_infer(tc.layer, reshape(tc.indata,size(tc.indata)...,1))
-            ortout = dropdims(ortout; dims=(3,4))
+            ortout = dropdims(ortout; dims=3)
+            
             @test size(ortout) == size(expout)
             @test ortout ≈ expout
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
+            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(Float32, 1:2*3*3), 2,3,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)
@@ -239,7 +242,15 @@
 
             @test string(res) == string(tc.layer)
 
-            @test res(tc.indata) ≈ tc.layer(tc.indata)
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, tc.indata)
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
         end
     end
 
@@ -272,7 +283,23 @@
             outsize = nout(g_org.inputs[1])
             bs = 4
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
-            @test g_org(indata) ≈ g_new(indata)
+
+            expout = g_org(indata)
+            resout = g_new(indata)
+
+            @test size(expout) == size(resout)
+            @test expout ≈ resout
+
+            # For FLux recurrent layers as they accept 2D input but ONNX wants 3D input
+            sizediff = length(ONNXmutable.shape(g_new.inputs[])) - ndims(indata)
+            indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
+
+            ortout, = onnxruntime_infer(g_org, indata)
+            ortout = dropdims(ortout, dims=Tuple(ndims(ortout)-sizediff+1:ndims(ortout)))
+
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
+
             return g_new
         end
 
@@ -545,10 +572,10 @@
         end
 
         @testset "RNN to LSTM" begin
-            v0 = inputvertex("input", 3, FluxDense())
+            v0 = inputvertex("input", 3, FluxRnn())
             v1 = mutable("rnn", RNN(nout(v0), 4), v0)
             v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
-            v3 = dense("dense", v2, 6, elu)
+            #v3 = dense("dense", v2, 6, elu) TODO!!
 
             test_named_graph(CompGraph(v0, v2))
         end

@@ -40,7 +40,7 @@ Other keyword arguments will be passed to `ONNX.Proto.ModelProto`.
 """
 modelproto(f; kwargs...) = modelproto(f, infer_inshapes(f)...; kwargs...)
 modelproto(f, inshapes::Union{Tuple, Missing}...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
-function modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = name_runningnr(), posthook=validate, kwargs...)
+function modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = default_namestrat(f), posthook=validate, kwargs...)
     mp = modelproto(;kwargs...)
     mp.graph = graphproto(f, indata...; namestrat=namestrat)
     mp.graph.name=modelname
@@ -207,6 +207,7 @@ function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
     return newnamestrat(ppout, nextname(pps[1]))
 end
 
+actfun(::FluxLayer, l) = l.σ
 function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(l, nextname(pp))
     wname, bname = lname .* ("_weight", "_bias")
@@ -224,11 +225,18 @@ function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.Att
     return newnamestrat(ppout, nextname(pp))
 end
 
-(l::Flux.Dense)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Gemm")
-actfun(::FluxDense, l) = l.σ
+function(l::Flux.Dense)(pp::AbstractProbe)
+    if !ismissing(shape(pp)) && ndims(pp) == 3
+        # Special case: Recurrent -> Dense. This is nothing special in flux as recurrent layers do 2D -> 2D
+        # For it to be valid ONNX we need to add an extra reshape
+        outsize = shape(pp)[1]
+        pp = reshape(pp, ismissing(outsize) ? 0 : outsize, :)
+    end
+    return weightlayer(layertype(l), l, pp, "Gemm")
+end
+
 
 (l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
-actfun(::FluxConv, l) = l.σ
 
 attribs(l) = attribs(layertype(l), l)
 attribs(lt::FluxConvolutional{N}, l) where N = ONNX.Proto.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
@@ -259,7 +267,10 @@ end
 actfun(::FluxBatchNorm, l) = l.λ
 
 
-(m::Flux.Recur)(pps::AbstractProbe...) = m.cell(m.state, pps...)
+# Dropdims because ONNX expects recurrent layers to output tensors of shape [seq_length, num_directions, batch_size, hidden_size] where num_directions is 2 in case of bidirectional and 1 otherwise
+# Flux.Recur is not bidirectional so we'll just assume the user wants to also drop num_directions so that recurrent layers can be stacked without hassle.
+# Override Flux.Recur with some other method to circumvent this behaviour if not wanted
+(m::Flux.Recur)(pps::AbstractProbe...) = dropdims(m.cell(m.state, pps...), dims=3)
 
 (l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
 (l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
@@ -369,7 +380,7 @@ Base.reshape(pp::AbstractProbe, shape...) = reshape(pp, shape)
 function Base.reshape(pp::AbstractProbe, shape::Tuple)
     fname = recursename("Reshape", nextname(pp))
     sname = fname .* "_shape"
-    fluxshape = collect(map(s -> s == Colon() ? -1 : s, shape))
+    fluxshape = collect(Int, map(s -> s == Colon() ? -1 : s, shape))
 
     add!(pp, ONNX.Proto.NodeProto(
         input=[name(pp), sname],
@@ -383,7 +394,7 @@ function Base.reshape(pp::AbstractProbe, shape::Tuple)
             new == -1 && return missing # CBA to figure out how to do this...
             new == 0 && return s[ind]
             return new
-        end
+        end |> Tuple
     end
 
     return newfrom(pp, fname, fshape)
