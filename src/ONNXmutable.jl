@@ -16,6 +16,7 @@ include("validate.jl")
 
 include("deserialize/ops.jl")
 include("deserialize/graphbuilder.jl")
+include("deserialize/combine.jl")
 include("deserialize/deserialize.jl")
 
 include("serialize/namingutil.jl")
