@@ -85,7 +85,7 @@ function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
    end
 
    # Case 2: Global pooling followed by reshape
-   if any(ot -> ot == optype(n), (:Reshape, :Squeeze))
+   if any(==(optype(n)), (:Reshape, :Squeeze))
       if length(ins) == 1 && optype(ins[1]) == :GlobalAveragePool
          ins[1].attribute[:wrap] = invariantops[optype(n)](n.attribute, params(n, gb)...)
          return ins[1], innodes(ins[1], gb)
@@ -104,9 +104,31 @@ function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
 
    #Case 4: Reshape between Recurrent to Dense
    # Reason is that Flux recurrent layers take 2D inputs just like dense layers so reshapes can be ignored
-   # TODO!
+   if check_recurrent_reshape(Val(optype(n)), gb, n)
+      outs = outnodes(n, gb)
+      if length(outs) > 0 && all(check_recurrent_reshape, Val.(optype.(outs)))
+         return check_combine(gb, ins[1])
+      end
+   end
 
    return n, ins
 end
+
+check_recurrent_reshape(::Val, gb::CompGraphBuilder, n::ONNX.Types.Node) = false
+check_recurrent_reshape(::Val{:Reshape}, gb::CompGraphBuilder, n::ONNX.Types.Node) = _check_recurrent_reshape(gb, n)
+
+function _check_recurrent_reshape(gb::CompGraphBuilder, n::ONNX.Types.Node)
+   ins = innodes(n, gb)
+   length(ins) == 1 || return false
+   return _check_recurrent_reshape(Val(optype(ins[1])), gb, ins[1])
+end
+
+_check_recurrent_reshape(::Val{:Squeeze}, gb::CompGraphBuilder, n::ONNX.Types.Node) = _check_recurrent_reshape(gb, n)
+
+_check_recurrent_reshape(::Val{ot}, gb::CompGraphBuilder, n::ONNX.Types.Node) where ot = ot in keys(fluxrecurrentlayers)
+
+check_recurrent_reshape(::Val) = false
+check_recurrent_reshape(::Val{:Gemm}) = true
+
 
 create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)

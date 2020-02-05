@@ -226,13 +226,18 @@ function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.Att
 end
 
 function(l::Flux.Dense)(pp::AbstractProbe)
+    ppl = pp
     if !ismissing(shape(pp)) && ndims(pp) == 3
         # Special case: Recurrent -> Dense. This is nothing special in flux as recurrent layers do 2D -> 2D
-        # For it to be valid ONNX we need to add an extra reshape
+        # For it to be valid ONNX however we need to add a reshape so that time dimension becomes batch dimension
         outsize = shape(pp)[1]
-        pp = reshape(pp, nin(l), :)
+        lname = recursename(l, nextname(pp))
+        ppn = newnamestrat(pp, s -> lname * genname(s))
+        ppn = reshape(ppn, nin(l), :)
+        ppl = newnamestrat(ppn, s -> lname)
     end
-    return weightlayer(layertype(l), l, pp, "Gemm")
+    ppout = weightlayer(layertype(l), l, ppl, "Gemm")
+    return newnamestrat(ppout, nextname(ppl))
 end
 
 

@@ -255,6 +255,7 @@
     end
 
     @testset "Graphs" begin
+        using NaiveNASflux
         import ONNXmutable: graphproto, modelproto, validate
 
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
@@ -577,10 +578,32 @@
             v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
 
             test_named_graph(CompGraph(v0, v2))
+        end
 
-            #TODO!
-            # v3 = dense("dense", v2, 6, elu)
-            # test_named_graph(CompGraph(v0, v3))
+        @testset "Recurrent to Dense" begin
+            v0 = inputvertex("input", 3, FluxRnn())
+            v1 = mutable("rnn", RNN(nout(v0), 4), v0)
+            v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
+            v3 = dense("dense", v2, 6, elu)
+
+            g_org = CompGraph(v0, v3)
+            g_new = CompGraph(serdeser(graphproto(g_org))...)
+
+            @test name.(vertices(g_new)) == name.(vertices(g_org))
+
+            indata = reshape(collect(Float32, 1:3*5*7), 3,5,7)
+
+            expout = g_org.(Flux.unstack(indata, 3))
+            resout = g_new.(Flux.unstack(indata, 3))
+
+            @test size.(expout) == size.(resout)
+            @test expout ≈ resout
+
+            ortout, = onnxruntime_infer(g_org, indata)
+            expout_s = hcat(expout...)
+
+            @test size.(expout_s) == size.(ortout)
+            @test expout_s ≈ ortout
         end
 
         @testset "Graph two inputs two outputs" begin

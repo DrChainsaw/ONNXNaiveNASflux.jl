@@ -24,7 +24,7 @@ function name_runningnr(namefun = genname)
     exists = Set{String}()
 
     return function(f, init="_0")
-        bname = genname(f)
+        bname = namefun(f)
         candname = bname * init
         next = -1
         while candname in exists
