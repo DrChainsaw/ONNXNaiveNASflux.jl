@@ -17,6 +17,7 @@ tsp_d(n::Integer) = ONNX.Proto.TensorShapeProto_Dimension(dim_value=n)
 tsp_d(s::String) = ONNX.Proto.TensorShapeProto_Dimension(dim_param=s)
 tsp_d(s::Symbol) = tsp_d(string(s))
 
+tp_tensor_elemtype(i::Integer) = i
 tp_tensor_elemtype(::Missing) = ONNX.Proto.TensorProto_DataType.UNDEFINED
 tp_tensor_elemtype(::Type{Float32}) = ONNX.Proto.TensorProto_DataType.FLOAT
 
@@ -50,6 +51,12 @@ ONNX.Proto.AttributeProto(name::String, f::Float32) = ONNX.Proto.AttributeProto(
     f = f
 )
 
+ONNX.Proto.AttributeProto(name::String, floats::Vector{Float32}) = ONNX.Proto.AttributeProto(
+    name=name,
+    _type = ONNX.Proto.AttributeProto_AttributeType.FLOATS,
+    floats = floats
+)
+
 ONNX.Proto.AttributeProto(name::String, f::Float64) = ONNX.Proto.AttributeProto(
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.FLOAT,
@@ -58,7 +65,7 @@ ONNX.Proto.AttributeProto(name::String, f::Float64) = ONNX.Proto.AttributeProto(
 
 ONNX.Proto.AttributeProto(name::String, i::NTuple{N, Int64}) where N = ONNX.Proto.AttributeProto(name, collect(i))
 
-ONNX.Proto.AttributeProto(name::String, i::AbstractVector{Int64}) where N = ONNX.Proto.AttributeProto(
+ONNX.Proto.AttributeProto(name::String, i::Vector{Int64}) where N = ONNX.Proto.AttributeProto(
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.INTS,
     ints = i
@@ -67,5 +74,11 @@ ONNX.Proto.AttributeProto(name::String, i::AbstractVector{Int64}) where N = ONNX
 ONNX.Proto.AttributeProto(name::String, s::String) where N = ONNX.Proto.AttributeProto(
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.STRING,
-    s = Vector{UInt8}(s)
+    s = Vector{UInt8}(strings)
+)
+
+ONNX.Proto.AttributeProto(name::String, strings::Vector{String}) where N = ONNX.Proto.AttributeProto(
+    name=name,
+    _type = ONNX.Proto.AttributeProto_AttributeType.STRINGS,
+    strings = Vector{UInt8}.(strings)
 )

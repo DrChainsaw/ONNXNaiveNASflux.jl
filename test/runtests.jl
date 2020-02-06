@@ -12,13 +12,13 @@ using Test
     @info "Test Serialization"
     @testset "Serialize" begin
         import ONNX
-        include("serialize/tensorproto.jl")
+        include("serialize/protos.jl")
         include("serialize/serialize.jl")
     end
 
-    @info "Test README examples"
-    include("examples.jl")
-
     @info "Test validation"
     include("validate.jl")
+
+    @info "Test README examples"
+    include("examples.jl")
 end

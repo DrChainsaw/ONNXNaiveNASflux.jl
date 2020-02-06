@@ -17,6 +17,8 @@
     cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
     cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
 
+    include("onnxruntime.jl")
+
     @testset "Nodes" begin
         using Statistics
         import ONNXmutable: optype, actfuns, fluxlayers, invariantops
@@ -124,16 +126,17 @@
             @test padexpand(Val(2), (1,2)) == [2,1,2,1]
             @test padexpand(Val(3), (1,2,3)) == [3,2,1,3,2,1]
 
-            @test padexpand(Val(1), (1,2)) == [2,1]
-            @test padexpand(Val(2), (1,2,3,4)) == [4,2,3,1]
-            @test padexpand(Val(3), (1,2,3,4,5,6)) == [6,4,2,5,3,1]
+            @test padexpand(Val(1), (1,2)) == [1,2]
+            @test padexpand(Val(2), (1,2,3,4)) == [3,1,4,2]
+            @test padexpand(Val(3), (1,2,3,4,5,6)) == [5,3,1,6,4,2]
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=Dense(3,4, relu), indata=reshape(collect(1:12), :, 4) .- 3),
-            (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
-            (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(1:3*9*9), 9,9,3,1) .- 10),
+            (layer=Dense(3,4, relu), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
+            (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:3*9*9), 9,9,3,1) .- 10),
+            (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:3*9*9), 9,9,3,1) .- 10),
             )
+            ONNXmutable.shape(p::NodeProbe) = missing
 
             inprobe = NodeProbe("input", genname)
 
@@ -151,7 +154,7 @@
             @test size(w) == size(weights(tc.layer))
             @test size(b) == size(bias(tc.layer))
 
-            @test w ≈ weights(tc.layer)
+            @test w ≈ ONNXmutable.flipweights(layertype(tc.layer), weights(tc.layer))
             @test b ≈ bias(tc.layer)
 
             ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
@@ -159,20 +162,29 @@
 
             @test string(res) == string(tc.layer)
 
-            @test res(tc.indata) ≈ tc.layer(tc.indata)
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, tc.indata)
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(1:12), :, 4) .- 3),
-            (layer=LSTM(4, 3), indata = reshape(collect(1:12), 4, :) .- 3),
+            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
+            (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
             )
             import NaiveNASflux: hiddenweights
 
+            ONNXmutable.shape(p::NodeProbe) = (missing, nout(tc.layer), missing)
             inprobe = NodeProbe("input", genname)
 
             outprobe = tc.layer(inprobe)
 
-            @test length(outprobe.protos) == 4
+            @test length(outprobe.protos) == 5
 
             lp,wip,whp,bp = Tuple(outprobe.protos)
 
@@ -183,6 +195,7 @@
 
             res = fluxlayers[optype(ln)](ln.attribute, wi, wh, b)
 
+            lt = layertype(tc.layer)
             @test size(weights(res)) == size(weights(tc.layer))
             @test size(hiddenweights(res)) == size(hiddenweights(tc.layer))
             @test size(bias(res)) == size(bias(res))
@@ -196,10 +209,16 @@
 
             @test size(resout) == size(expout)
             @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, reshape(tc.indata,size(tc.indata)...,1))
+            ortout = dropdims(ortout; dims=3)
+
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(1:2*3*3), 2,3,3,1) .- 10),
+            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(Float32, 1:2*3*3), 2,3,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)
@@ -223,11 +242,20 @@
 
             @test string(res) == string(tc.layer)
 
-            @test res(tc.indata) ≈ tc.layer(tc.indata)
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, tc.indata)
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
         end
     end
 
     @testset "Graphs" begin
+        using NaiveNASflux
         import ONNXmutable: graphproto, modelproto, validate
 
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
@@ -256,7 +284,23 @@
             outsize = nout(g_org.inputs[1])
             bs = 4
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
-            @test g_org(indata) ≈ g_new(indata)
+
+            expout = g_org(indata)
+            resout = g_new(indata)
+
+            @test size(expout) == size(resout)
+            @test expout ≈ resout
+
+            # For FLux recurrent layers as they accept 2D input but ONNX wants 3D input
+            sizediff = length(ONNXmutable.shape(g_new.inputs[])) - ndims(indata)
+            indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
+
+            ortout, = onnxruntime_infer(g_org, indata)
+            ortout = dropdims(ortout, dims=Tuple(ndims(ortout)-sizediff+1:ndims(ortout)))
+
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
+
             return g_new
         end
 
@@ -529,12 +573,37 @@
         end
 
         @testset "RNN to LSTM" begin
-            v0 = inputvertex("input", 3, FluxDense())
+            v0 = inputvertex("input", 3, FluxRnn())
+            v1 = mutable("rnn", RNN(nout(v0), 4), v0)
+            v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
+
+            test_named_graph(CompGraph(v0, v2))
+        end
+
+        @testset "Recurrent to Dense" begin
+            v0 = inputvertex("input", 3, FluxRnn())
             v1 = mutable("rnn", RNN(nout(v0), 4), v0)
             v2 = mutable("lstm", LSTM(nout(v1), 5), v1)
             v3 = dense("dense", v2, 6, elu)
 
-            test_named_graph(CompGraph(v0, v2))
+            g_org = CompGraph(v0, v3)
+            g_new = CompGraph(serdeser(graphproto(g_org))...)
+
+            @test name.(vertices(g_new)) == name.(vertices(g_org))
+
+            indata = reshape(collect(Float32, 1:3*5*7), 3,5,7)
+
+            expout = g_org.(Flux.unstack(indata, 3))
+            resout = g_new.(Flux.unstack(indata, 3))
+
+            @test size.(expout) == size.(resout)
+            @test expout ≈ resout
+
+            ortout, = onnxruntime_infer(g_org, indata)
+            expout_s = hcat(expout...)
+
+            @test size.(expout_s) == size.(ortout)
+            @test expout_s ≈ ortout
         end
 
         @testset "Graph two inputs two outputs" begin

@@ -2,6 +2,7 @@ const actfuns = Dict{Symbol, Any}()
 const rnnactfuns = Dict{Symbol, Any}() # Recurrent layers have activation functions as attributes and use different parameter names compared to their respective operations.
 const actlayers = Dict{Symbol, Any}()
 const fluxlayers = Dict{Symbol, Any}()
+const fluxrecurrentlayers = Dict{Symbol, Any}()
 const invariantops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
 
@@ -58,7 +59,7 @@ rnnactfuns[:Tanh] = (ind, params) -> tanh
 mrev(x) = x
 mrev(x::AbstractVector) = reverse(x)
 prev(x) = x
-prev(x::AbstractVector) = reverse!(reshape(permutedims(reshape(x, length(x) ÷ 2,:)),:))
+prev(x::AbstractVector) = reshape(permutedims(reverse(reshape(x, length(x) ÷ 2,:);dims=1)),:)
 
 
 # mrev = maybe reverse. prev = rearrange padding, e.g. (1,2,1,2) => (2,2,1,1) or (1,2,3,1,2,3) => (3,3,2,2,1,1)
@@ -70,7 +71,7 @@ a2t(a::AbstractArray) = Tuple(a)
 actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxConv{N-2}())))) where {T, N}
     a,_,p,s,d = akpsd(params)
     @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
-    return Conv(weight, bias, a, pad=p, stride=s, dilation=d)
+    return Conv(flipweights(FluxConv{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
 end
 
 actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxDense())))) where {T,N}
@@ -93,19 +94,19 @@ end
 default_Wb_Rb(Wh_WBh) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) * 2, size(Wh_WBh, 3))), 0)
 default_init_h(Wb_Rb, sc) = fill!(similar(Wb_Rb, (size(Wb_Rb,1) ÷ sc, size(Wb_Rb,2))), 0)
 
-fluxlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
-    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # Or is it?
+fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
+    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
 
-    Wi,Wh,b,h = recurrent_arrays(Wi_WBi, Wh_WBh, Wb_Rb, h3d)
-    act = rnnactfuns[Symbol(get(params, :activations, "Tanh"))](1, params)
+    Wi,Wh,b,h = recurrent_arrays(FluxRnn(), Wi_WBi, Wh_WBh, Wb_Rb, h3d)
+    act = rnnactfuns[Symbol(get(params, :activations, ["Tanh"])[])](1, params)
     cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(b), 0))
     return Flux.Recur(cell, Flux.hidden(cell), h)
 end
 
-fluxlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, 8), c3d=default_init_h(Wb_Rb,8), peep=nothing)
-    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # Or is it?
+fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, 8), c3d=default_init_h(Wb_Rb,8), peep=nothing)
+    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
     @assert isnothing(peep) "Peepholes not supported!" # Or?
-    Wi,Wh,b,h,c = recurrent_arrays(Wi_WBi, Wh_WBh, Wb_Rb, h3d, c3d)
+    Wi,Wh,b,h,c = recurrent_arrays(FluxLstm(), Wi_WBi, Wh_WBh, Wb_Rb, h3d, c3d)
     # Flux only supports default activation functions
     # We can only check that given values doesn't deviate
     supported = [:Sigmoid, :Tanh, :Tanh]
@@ -120,14 +121,15 @@ fluxlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh)
     return Flux.Recur(cell, Flux.hidden(cell), (h, c))
 end
 
-function recurrent_arrays(Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
+function recurrent_arrays(lt, Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     # ONNX weights are on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
     # Flux weights are of shape [hidden_size, input_size]
     # To spice things up a bit, all julia arrays are loaded in reverse order, i.e we get an array with the arrangement [input_size, hidden_size, num_directions].
     # First remove the num_directions dimension, then transpose into the correct shape
-    Wi = permutedims(dropdims(Wi_WBi, dims=3))
-    Wh = permutedims(dropdims(Wh_WBh, dims=3))
-    b = dropdims(sum(reshape(Wb_Rb, :, 2), dims=2),dims=2)
+    hsize = size(Wh_WBh, 1)
+    Wi = unflipweights(lt, permutedims(dropdims(Wi_WBi, dims=3)), hsize)
+    Wh = unflipweights(lt, permutedims(dropdims(Wh_WBh, dims=3)), hsize)
+    b = dropdims(unflipweights(lt, sum(reshape(Wb_Rb, :, 2), dims=2), hsize),dims=2)
     hs = (dropdims(h, dims=ndims(h)) for h in h3ds)
     return Wi, Wh, b, hs...
 end
@@ -201,8 +203,9 @@ expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     indims = length(inshape)
-    insize = indims > 0 ? inshape[max(1, actdim(indims))] : 1 # assume scalar
-    return inputvertex(name, insize, guess_layertype(indims))
+    ltype = guess_layertype(indims)
+    insize = indims > 0 ? inshape[max(1, actdim(ltype))] : 1 # assume scalar
+    return inputvertex(name, insize, ltype)
 end
 
 verts[:Add] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
@@ -218,6 +221,10 @@ end
 
 function refresh()
     for (s, f) in actlayers
+        fluxlayers[s] = f
+    end
+
+    for (s, f) in fluxrecurrentlayers
         fluxlayers[s] = f
     end
 

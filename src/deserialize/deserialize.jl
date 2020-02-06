@@ -40,23 +40,21 @@ function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes, vfun = create_vertex_
 end
 
 NaiveNASlib.name(vi::ONNX.Types.ValueInfo) = vi.name
-#name(n::ONNX.Types.Node) = n.name
 NaiveNASlib.inputs(n::ONNX.Types.Node) = n.input
 NaiveNASlib.outputs(n::ONNX.Types.Node) = n.output
 optype(n::ONNX.Types.Node) = Symbol(n.op_type)
 
 """
-   vertex(gb::CompGraphBuilder, n::ONNX.Types.Node)::AbstractVertex
+   vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
 
 Return an `AbstractVertex` created from `n`.
 
 Inputs to the returned vertex are created recursively based on state in `gb`.
 """
-function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)::AbstractVertex
+function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
       return get!(gb.created, n) do
          n_create, ins = check_combine(gb, n)
          invertices = map(ni -> vertex(gb, ni, vfun), ins)
-         # TODO: Let user supply this...
          v = vfun(gb, n_create, invertices)
          if isempty(nin(v))
             push!(gb.inputs, v)
@@ -65,36 +63,5 @@ function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_d
       end
 end
 
-"""
-   check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
 
-Return a potentially combined [`ONNX.Types.Node`](@ref) and its inputs.
-
-Purpose is to handle e.g activation functions to layers which Flux has as member of the layer struct while ONNX has as a separate node.
-
-Main motivation is an attempt to make serialization/deserialization "pure" in the sense that `g -> serialize -> deserialize === g`.
-
-Another motivation is that mutation becomes a bit harder if things like global pooling and dropping of dimensions are separated into two vertices.
-"""
-function check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
-   ins = innodes(n, gb)
-   # Case 1: Activation functions
-   if optype(n) in keys(actfuns)
-      if length(ins) == 1 && optype(ins[1]) in keys(actlayers)
-         ins[1].attribute[:activation] = actfuns[optype(n)](n.attribute, params(n, gb)...)
-         return ins[1], innodes(ins[1], gb)
-      end
-   end
-
-   # Case 2: Global pooling followed by reshape
-   if any(ot -> ot == optype(n), (:Reshape, :Squeeze))
-      if length(ins) == 1 && optype(ins[1]) == :GlobalAveragePool
-         ins[1].attribute[:wrap] = invariantops[optype(n)](n.attribute, params(n, gb)...)
-         return ins[1], innodes(ins[1], gb)
-      end
-   end
-
-   return n, ins
-end
-
-create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array{<:AbstractVertex}; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)
+create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)

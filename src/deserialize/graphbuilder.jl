@@ -35,9 +35,16 @@ innames(::Val{:Input}, ::ONNX.Types.Node, ::CompGraphBuilder) = []
 innames(::Val{:Add}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
 innames(::Val{:Concat}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
 
+function outnames(n::ONNX.Types.Node, gb::CompGraphBuilder)
+   allins = vcat(innames.(gb.g.node, Ref(gb))...)
+   return filter(oname -> oname in allins, outputs(n))
+end
+
 innodes(n::ONNX.Types.Node, gb::CompGraphBuilder) = node.(innames(n, gb), gb, n)
+function outnodes(n::ONNX.Types.Node, gb::CompGraphBuilder)
+    onames = outnames(n, gb)
+    filter(nn -> any(on -> on in nn.input, onames), gb.g.node)
+end
 
 Flux.params(n::ONNX.Types.Node, gb::CompGraphBuilder) = params(Val(optype(n)), n, gb)
-Flux.params(::Val, n::ONNX.Types.Node, gb::CompGraphBuilder) = map(pname -> gb.g.initializer[pname], inputs(n)[2:end])
-Flux.params(::Val{:Add}, n::ONNX.Types.Node, ::CompGraphBuilder) = []
-Flux.params(::Val{:Concat}, n::ONNX.Types.Node, ::CompGraphBuilder) = []
+Flux.params(::Val, n::ONNX.Types.Node, gb::CompGraphBuilder) = map(pname -> gb.g.initializer[pname], setdiff(inputs(n), innames(n, gb)))
