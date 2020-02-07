@@ -23,6 +23,9 @@ shape(::FluxDense, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
 shape(::FluxRecurrent, outsize) = (outsize, missing, missing)
 
+aggshape(f, d::Number...) = f(d...)
+aggshape(f, d...) = missing
+
 rmdims(t::Tuple, dim::Integer) = t[1:end .!= dim]
 rmdims(t::Tuple, dims) = Tuple(t[i] for i in 1:length(t) if i ∉ dims)
 

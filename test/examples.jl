@@ -83,7 +83,7 @@ end
         op_type = optype))
 
         # Probes can procreate like this
-        return newfrom(p, nodename)
+        return newfrom(p, nodename, s -> s)
     end
 
     gp = ONNXmutable.graphproto()

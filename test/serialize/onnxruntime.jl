@@ -11,8 +11,7 @@ function onnxruntime_infer(f, inputs...)
 
 	modfile = "tmpmodel.onnx"
 	try
-		# TODO: Alot of functions do not handle input->output shapes. Make them do so!!
-		onnx(modfile, f, map(inpt -> ntuple(i -> missing, ndims(inpt)), inputs)...)
+		onnx(modfile, f, size.(inputs)...)
 
 		ort = pyimport("onnxruntime")
 		sess = ort.InferenceSession(modfile);
