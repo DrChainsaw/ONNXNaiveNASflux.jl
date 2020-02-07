@@ -132,11 +132,13 @@ newnamestrat(p::ProtoProbe, f, pname=p.name) = ProtoProbe(pname, p.shape, f, p.g
 """
     newfrom(p::ProtoProbe, outname::AbstractString, fshape=identity)
 
-Return a new `ProtoProbe` with name `outname`. Argument `fshape` can be used to determine a new shape.
+Return a new `ProtoProbe` with name `outname`. Argument `fshape` is used to determine a new shape (typically a function).
 """
-newfrom(p::ProtoProbe, outname::AbstractString, fshape=identity) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
+newfrom(p::ProtoProbe, outname::AbstractString, fshape) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
 
-nextshape(p::AbstractProbe, f::Function) = f(shape(p))
+nextshape(p::AbstractProbe, f::Function) = nextshape(shape(p), f)
+nextshape(::Missing, f::Function) = missing
+nextshape(s::Tuple, f::Function) = f(s)
 
 
 add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
@@ -221,8 +223,9 @@ function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.Att
     add!(pp, ONNX.Proto.TensorProto(flipweights(lt, weights(l)), wname))
     add!(pp, ONNX.Proto.TensorProto(bias(l), bname))
 
-    ppout = actfun(lt, l)(newnamestrat(pp, f -> join([lname, genname(f)], "_"), lname))
-    return newnamestrat(ppout, nextname(pp))
+    ppl = newfrom(pp, lname, s -> outshape(l, s))
+    ppout = actfun(lt, l)(newnamestrat(ppl, f -> join([lname, genname(f)], "_"), lname))
+    return newnamestrat(ppout, nextname(ppl))
 end
 
 function(l::Flux.Dense)(pp::AbstractProbe)
@@ -239,7 +242,6 @@ function(l::Flux.Dense)(pp::AbstractProbe)
     ppout = weightlayer(layertype(l), l, ppl, "Gemm")
     return newnamestrat(ppout, nextname(ppl))
 end
-
 
 (l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
 
@@ -282,6 +284,8 @@ actfun(::FluxBatchNorm, l) = l.λ
 
 NaiveNASflux.layertype(::Flux.RNNCell) = FluxRnn()
 NaiveNASflux.layertype(::Flux.LSTMCell) = FluxLstm()
+NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wh
+NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wh
 
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
@@ -310,7 +314,7 @@ function recurrent_node(l, pp, optype)
     add!(pp, ONNX.Proto.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
 
     # ONNX wants num directions as an extra dimension to output
-    return newfrom(pp, lname, s -> (s[1:end-1]..., 1, s[end]))
+    return newfrom(pp, lname, s -> (nout(l), s[2], 1, s[end]))
 end
 
 
@@ -323,7 +327,7 @@ Flux.elu(::ActivationAttributeProbe, α=1f0) = rnnactattribs("Elu", α)
 rnnactattribs(op::AbstractString, α=0f0, β=0f0) = rnnactattribs([op], [α], [β])
 rnnactattribs(ops::AbstractVector, αs, βs) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha", "activation_beta"], [ops, αs, βs])
 
-function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
+function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
     lname = recursename(lowercase(optype), nextname(pps[1]))
     add!(pps[1], ONNX.Proto.NodeProto(
     input = collect(name.(pps)),
@@ -331,29 +335,29 @@ function attribfun(optype, pps::AbstractProbe...; attributes = ONNX.Proto.Attrib
     name=lname,
     attribute = attributes,
     op_type= optype))
-    return newfrom(pps[1], lname)
+    return newfrom(pps[1], lname, identity)
 end
 
-Flux.relu(pp::AbstractProbe) = attribfun("Relu", pp)
-Flux.elu(pp::AbstractProbe, α=1f0) = attribfun("Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
-Flux.selu(pp::AbstractProbe) = attribfun("Selu", pp)
-Flux.selu(pp::AbstractProbe, γ, α) = attribfun("Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
-(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun("MaxPool", pp; attributes = attribs(l))
-(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun("AveragePool", pp; attributes = attribs(l))
-(l::Flux.Dropout)(pp::AbstractProbe) = attribfun("Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
+Flux.relu(pp::AbstractProbe) = attribfun(identity, "Relu", pp)
+Flux.elu(pp::AbstractProbe, α=1f0) = attribfun(identity, "Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
+Flux.selu(pp::AbstractProbe) = attribfun(identity, "Selu", pp)
+Flux.selu(pp::AbstractProbe, γ, α) = attribfun(identity, "Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
+(l::Flux.MaxPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "MaxPool", pp; attributes = attribs(l))
+(l::Flux.MeanPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "AveragePool", pp; attributes = attribs(l))
+(l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
 
 
 function globalmeanpool(pp::AbstractProbe, wrap)
-     gpp = attribfun("GlobalAveragePool", pp)
+     gpp = attribfun(s -> (1, 1, s[3:end]...), "GlobalAveragePool", pp)
      ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
      wpp = wrap(ppnext)
      return newnamestrat(wpp, nextname(gpp))
 end
 
-Base.:+(pps::AbstractProbe...) = attribfun("Add", pps...)
+Base.:+(pps::AbstractProbe...) = attribfun(identity, "Add", pps...)
 
 
-function axisfun(optype, pps::AbstractProbe...; dims, axname="axes", fshape=identity)
+function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
     fname = recursename(lowercase(optype), nextname(pps[1]))
 
     attrib = if isempty(dims)
@@ -376,9 +380,14 @@ end
 scal2tup(x) = (x,)
 scal2tup(x::Tuple) = x
 
-Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims, axname="axis")
-Statistics.mean(pp::AbstractProbe; dims=()) = axisfun("ReduceMean", pp; dims=scal2tup(dims))
-Base.dropdims(pp::AbstractProbe; dims) = axisfun("Squeeze", pp; dims=scal2tup(dims), fshape = s -> rmdims(s, dims))
+Base.cat(pps::AbstractProbe...; dims) = axisfun("Concat", pps...; dims=dims, axname="axis") do s
+    sumshape = aggshape.(+, vcat(shape.(pps)...)...)
+    return ntuple(i -> i in dims ? sumshape[i] : s[i], length(s))
+end
+Statistics.mean(pp::AbstractProbe; dims=()) = axisfun("ReduceMean", pp; dims=scal2tup(dims)) do s
+    return ntuple(i -> i in dims ? 1 : s[i], length(s))
+end
+Base.dropdims(pp::AbstractProbe; dims) = axisfun(s -> rmdims(s, dims), "Squeeze", pp; dims=scal2tup(dims))
 
 reshape_keepshape(pp::AbstractProbe, shape) = reshape(pp, shape)
 Base.reshape(pp::AbstractProbe, shape...) = reshape(pp, shape)

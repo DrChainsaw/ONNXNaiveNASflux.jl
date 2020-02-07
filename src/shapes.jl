@@ -23,6 +23,9 @@ shape(::FluxDense, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
 shape(::FluxRecurrent, outsize) = (outsize, missing, missing)
 
+aggshape(f, d::Number...) = f(d...)
+aggshape(f, d...) = missing
+
 rmdims(t::Tuple, dim::Integer) = t[1:end .!= dim]
 rmdims(t::Tuple, dims) = Tuple(t[i] for i in 1:length(t) if i ∉ dims)
 
@@ -51,4 +54,34 @@ function unflipweights(::FluxLstm, w, hsize)
     forget = Flux.gate(w, hsize, 3)
     cell = Flux.gate(w, hsize, 4)
     return vcat(input, forget, cell, output)
+end
+
+outshape(l, s) = outshape(layertype(l), l, s)
+
+outshape(lt::FluxDense, l, s) = (nout(l), s[end])
+function outshape(lt::FluxConvolutional{N}, l, s) where N
+    p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
+    k = size(weights(l))[1:N]
+    d = l.dilation
+    stride = l.stride
+
+    o = map(zip(1:N, s)) do (i, si)
+        # Conv arithmetic from https://arxiv.org/pdf/1603.07285.pdf
+        aggshape(x -> (x + p[i] - k[i] - (k[i] - 1)*(d[i] - 1)) ÷ stride[i] + 1, si)
+    end
+
+    return (o..., nout(l), s[end])
+end
+
+function outsize(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s) where N
+    p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
+    k = l.k
+    stride = l.stride
+
+    o = map(zip(1:N, s)) do (i, si)
+        # Conv arithmetic from https://arxiv.org/pdf/1603.07285.pdf
+        aggshape(x -> (x + p[i] - k[i]) ÷ stride[i] + 1, si)
+    end
+
+    return (o..., nout(l), s[end])
 end

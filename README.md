@@ -104,7 +104,7 @@ function myfun(probes::AbstractProbe...)
     op_type = optype))
 
     # Probes can procreate like this
-    return newfrom(p, nodename)
+    return newfrom(p, nodename, s -> s)
 end
 ```
 See [serialize.jl](src/serialize/serialize.jl) for existing operations.
