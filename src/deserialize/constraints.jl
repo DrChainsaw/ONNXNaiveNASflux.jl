@@ -8,24 +8,62 @@ NaiveNASlib.base(t::SizePseudoTransparent) = t.base
 
 NaiveNASlib.all_in_Δsize_graph(::SizePseudoTransparent, d, v, visited) = all_in_Δsize_graph(SizeInvariant(), d, v, visited)
 
+"""
+    reshape_keepshape(x, shape)
 
+Same as `reshape` except that `shape[i] = 0` results in `size(y, i+offs) == size(x, i)` where `y` is the output of this function and `offs = ndims(x) - length(shape)`.
+
+This is basically trying to be compliant to the ONNX Reshape operator although the description there of how to interpret a shape of `0` is a bit vague.
+"""
+function reshape_keepshape(x, shape)
+    offs = max(0, ndims(x) - length(shape))
+    newshape = map(enumerate(shape)) do (ind, new)
+        new == 0 && return size(x, ind+offs)
+        return new
+    end
+    return reshape(x, newshape...)
+end
+
+
+"""
+    Reshape{T}
+    Reshape(dims...; activation_dim=actdim(length(dims)))
+    Reshape(dims; activation_dim=actdim(length(dims)))
+
+Reshape operation wrapped in a struct for the sole purpose of handling size changes in neighbouring vertices.
+
+Ensures that changes in output size of the input vertex are possible to reshape into the shape given by `dims`.
+
+Will treat `Integer`s in dims as fixed, meaning that if `dims[activation_dim] isa Integer` the input size of the output vertices will be fixed as well.
+"""
 struct Reshape{T}
+    adim::Int
     dims::T
 end
-(r::Reshape)(x) = reshape(x, r.dims)
+Reshape(dims...; activation_dim=actdim(length(dims))) = Reshape(activation_dim, dims)
+Reshape(dims; activation_dim=actdim(length(dims))) = Reshape(activation_dim, dims)
+
+(r::Reshape)(x) = any(==(0), r.dims) ? reshape_keepshape(x, r.dims) : reshape(x, r.dims)
+
 function NaiveNASlib.mutate_inputs(r::Reshape, ins) end
 function NaiveNASlib.mutate_outputs(r::Reshape, outs) end
+
+# What about compconstraint for NaiveNASlib.AbstractJuMPSelectionStrategy? Ugh... I give up! Should be treated as SizeAbsorb, i.e no attempt to map elements between input and outputs.
 
 function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
 
-    reshape_constraint(s, r.dims[actdim(length(r.dims))], ins, data)
+    reshape_nout_constraint(s, r.dims[r.adim], ins, data)
     isempty(ins) && return
 
+    fixeddims = filter(dim -> dim isa Integer && dim != 0, collect(r.dims))
+    isempty(fixeddims) && return
 
-    fixeddims = filter(dim -> dim isa Integer, collect(r.dims))
-
-    # TODO: What if there is no colon? Will the below work then or do we need to freeze the sizes?
+    if length(fixeddims) == length(r.dims)
+        # No size change possible!
+        @constraint(data.model, [i=1:length(ins), j=1:length(fixeddims)], data.noutdict[ins[i]] == nout(ins[i]))
+        return
+    end
 
     # Make sure that nout of inputs is an integer multiple of at least one of the output sizes
     # It is unfortunately too restrictive to just enforce fv_dims[j] * fixeddims[j] == nout[ins[i]] ∀ i, j
@@ -49,11 +87,15 @@ end
 
 
 # Case 1: Output size is fixed so we will only put constraints on the inputs to ensure reshaping is possible
-function reshape_constraint(s, outsize::Integer, ins, data)
-    @constraint(data.model, data.noutdict[data.vertex] == outsize)
+function reshape_nout_constraint(s, outsize::Integer, ins, data)
+    if outsize == 0
+        @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] == nout(data.vertex))
+    else
+        @constraint(data.model, data.noutdict[data.vertex] == outsize)
+    end
 end
 
 # Case 2: Outsize is not fixed so we need to change it so that the output vertices change their input size
-function reshape_constraint(s, outsize::Colon, ins, data)
+function reshape_nout_constraint(s, outsize::Colon, ins, data)
     @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] / nout(data.vertex) == data.noutdict[ins[i]] / nout(ins[i]))
 end

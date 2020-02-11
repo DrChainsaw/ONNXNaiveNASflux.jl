@@ -58,6 +58,57 @@
         @test size(g(ones(3, 15))) == (5,3,4,2)
     end
 
+    @testset "Reshape 2D -> 4D variable nout 0-dim" begin
+        v0 = inputvertex("in", 3)
+        v1 = dv("v1", v0, 4)
+        v2 = rv("v2", v1, 2, (0, 5, Colon(), 2))
+        v3 = cv("v3", v2, 4)
+
+        g = CompGraph(v0, v3)
+
+        @test size(g(ones(3, 20))) == (4,5,4,2)
+
+        @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
+        apply_mutation(g)
+
+        @test nout.(vertices(g)) == [3, 6, 3, 4]
+        @test size(g(ones(3, 30))) == (6,5,4,2)
+    end
+
+    @testset "Reshape 2D -> 4D all fixed" begin
+        v0 = inputvertex("in", 3)
+        v1 = dv("v1", v0, 4)
+        v2 = rv("v2", v1, 3, (5, 2, 3, 2))
+        v3 = cv("v3", v2, 4)
+
+        g = CompGraph(v0, v3)
+
+        @test size(g(ones(3, 15))) == (5,2,4,2)
+
+        @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
+        apply_mutation(g)
+
+        @test nout.(vertices(g)) == [3, 4, 3, 4]
+        @test size(g(ones(3, 15))) == (5,2,4,2)
+    end
+
+    @testset "Reshape 2D -> 4D all fixed 0-dim" begin
+        v0 = inputvertex("in", 3)
+        v1 = dv("v1", v0, 4)
+        v2 = rv("v2", v1, 2, (0, 5, 2, 2))
+        v3 = cv("v3", v2, 4)
+
+        g = CompGraph(v0, v3)
+
+        @test size(g(ones(3, 20))) == (4,5,4,2)
+
+        @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
+        apply_mutation(g)
+
+        @test nout.(vertices(g)) == [3, 6, 2, 4]
+        @test size(g(ones(3, 20))) == (6,5,4,2)
+    end
+
     @testset "Reshape 4D -> 2D variable batch" begin
         v0 = inputvertex("in", 3)
         v1 = cv("v1", v0, 4)
@@ -90,5 +141,22 @@
 
         @test nout.(vertices(g)) == [3, 16, 20, 4]
         @test size(g(ones(5,2,3,2))) == (4, 16)
+    end
+
+    @testset "Reshape 4D -> 2D variable nout 0-dim" begin
+        v0 = inputvertex("in", 3)
+        v1 = cv("v1", v0, 4)
+        v2 = rv("v2", v1, 40, (Colon(), 0))
+        v3 = dv("v3", v2, 4)
+
+        g = CompGraph(v0, v3)
+
+        @test size(g(ones(5,2,3,2))) == (4, 2)
+
+        @test_logs Δnout(v1, -2)
+        apply_mutation(g)
+
+        @test nout.(vertices(g)) == [3, 2, 20, 4]
+        @test size(g(ones(5,2,3,2))) == (4, 2)
     end
 end
