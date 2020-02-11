@@ -8,12 +8,15 @@ import NaiveNASflux: indim, outdim, actdim, actrank
 using Setfield
 using Statistics
 import Pkg
+import JuMP: @variable, @constraint
+import NaiveNASflux.NaiveNASlib.compconstraint!
 
 export onnx
 
 include("shapes.jl")
 include("validate.jl")
 
+include("deserialize/constraints.jl")
 include("deserialize/ops.jl")
 include("deserialize/graphbuilder.jl")
 include("deserialize/combine.jl")
