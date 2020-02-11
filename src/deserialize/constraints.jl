@@ -16,7 +16,7 @@ Same as `reshape` except that `shape[i] = 0` results in `size(y, i+offs) == size
 This is basically trying to be compliant to the ONNX Reshape operator although the description there of how to interpret a shape of `0` is a bit vague.
 """
 function reshape_keepshape(x, shape)
-    offs = max(0, ndims(x) - length(shape))
+    offs = ndims(x) - length(shape)
     newshape = map(enumerate(shape)) do (ind, new)
         new == 0 && return size(x, ind+offs)
         return new
@@ -40,20 +40,36 @@ struct Reshape{T}
     adim::Int
     dims::T
 end
-Reshape(dims...; activation_dim=actdim(length(dims))) = Reshape(activation_dim, dims)
-Reshape(dims; activation_dim=actdim(length(dims))) = Reshape(activation_dim, dims)
+Reshape(dims...; activation_dim=actdim(guess_layertype(length(dims)))) = Reshape(activation_dim, dims)
+Reshape(dims; activation_dim=actdim(guess_layertype(length(dims)))) = Reshape(activation_dim, dims)
 
 (r::Reshape)(x) = any(==(0), r.dims) ? reshape_keepshape(x, r.dims) : reshape(x, r.dims)
 
+function calc_outsize(r::Reshape, invertex)
+    outshape = r.dims[r.adim]
+    outshape == 0 && return nout(invertex)
+    outshape isa Integer && return outshape
+    outshape isa Colon && return 0 # Must be fixed later...
+    error("Unknown outshape: " + outshape)
+end
+
+
 function NaiveNASlib.mutate_inputs(r::Reshape, ins) end
 function NaiveNASlib.mutate_outputs(r::Reshape, outs) end
+
+NaiveNASlib.minΔninfactor(r::Reshape) = minimum(filter(dim -> dim isa Integer && dim != 0, collect(r.dims)))
+NaiveNASlib.minΔnoutfactor(r::Reshape) = minΔninfactor(r)
+
+NaiveNASflux.layer(r::Reshape) = r
+NaiveNASflux.actdim(r::Reshape) = r.adim
+NaiveNASflux.actrank(r::Reshape) = length(r.dims)
 
 # What about compconstraint for NaiveNASlib.AbstractJuMPSelectionStrategy? Ugh... I give up! Should be treated as SizeAbsorb, i.e no attempt to map elements between input and outputs.
 
 function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
 
-    reshape_nout_constraint(s, r.dims[r.adim], ins, data)
+    reshape_nout_constraint(s, r.dims[r.adim], r, ins, data)
     isempty(ins) && return
 
     fixeddims = filter(dim -> dim isa Integer && dim != 0, collect(r.dims))
@@ -87,15 +103,32 @@ end
 
 
 # Case 1: Output size is fixed so we will only put constraints on the inputs to ensure reshaping is possible
-function reshape_nout_constraint(s, outsize::Integer, ins, data)
+function reshape_nout_constraint(s, outsize::Integer, r, ins, data)
     if outsize == 0
-        @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] == nout(data.vertex))
+
+        fix_size = true
+        for iv in ins
+            inrank = unique(actrank(iv))[] # Should be one or else we are fked
+            inadim = unique(actdim(iv))[] # Should be one or else we are fked
+
+            if inrank - length(r.dims) + r.adim + 1== inadim
+                # Dimension to keep size of happens to be input layers activation dimension.
+                # This is basically a SizeInvariant vertex
+                @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] == data.noutdict[iv])
+                fix_size = false
+            end
+        end
+
+        if fix_size
+            @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] == nout(data.vertex))
+        end
+
     else
         @constraint(data.model, data.noutdict[data.vertex] == outsize)
     end
 end
 
 # Case 2: Outsize is not fixed so we need to change it so that the output vertices change their input size
-function reshape_nout_constraint(s, outsize::Colon, ins, data)
+function reshape_nout_constraint(s, outsize::Colon, r, ins, data)
     @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] / nout(data.vertex) == data.noutdict[ins[i]] / nout(ins[i]))
 end

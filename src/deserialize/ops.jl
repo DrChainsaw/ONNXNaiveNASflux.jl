@@ -4,6 +4,7 @@ const actlayers = Dict{Symbol, Any}()
 const fluxlayers = Dict{Symbol, Any}()
 const fluxrecurrentlayers = Dict{Symbol, Any}()
 const invariantops = Dict{Symbol, Any}()
+const pseudotransparentops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
 
 # Rundown of the basic idea here:
@@ -154,22 +155,6 @@ function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MeanPool(size(x)[1:N-2])(x))
 end
 
-invariantops[:Reshape] = function(params, shape)
-    shape_t = Tuple(reverse(shape))
-    any(s -> s == 0 || s == -1, shape_t) && return x -> reshape_keepshape(x, shape_t)
-    return x -> reshape(x, shape_t)
-end
-function reshape_keepshape(x, shape)
-    offs = ndims(x) - length(shape)
-    newshape = map(enumerate(shape)) do (ind, new)
-        new == -1 && return Colon()
-        new == 0 && return size(x, ind+offs)
-        return new
-    end
-    return reshape(x, newshape...)
-end
-
-
 invariantops[:Squeeze] = function(params)
     np_axes = get(params, :axes, missing)
     dimfun = ismissing(np_axes) ? x -> Tuple(findall(i -> i == 1, size(x))) : x -> Tuple(numpy2fluxdim.(np_axes, ndims(x)))
@@ -199,6 +184,11 @@ invariantops[:ReduceMean] = function(params)
     end
 end
 expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
+
+pseudotransparentops[:Reshape] = function(params, shape)
+    shape_t = Tuple(reverse(replace(shape, -1 => Colon())))
+    return Reshape(shape_t)
+end
 
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
@@ -239,6 +229,15 @@ function refresh()
     for (s, f) in invariantops
         verts[s] = (name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...) -> invariantvertex(layerfun(f(args...)), inputs...; traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
     end
+
+    for (s,f) in pseudotransparentops
+        verts[s] = function(name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...)
+            comp = f(args...)
+            outsize = calc_outsize(comp, inputs...)
+            return absorbvertex(layerfun(comp), outsize, inputs...; traitdecoration = t -> NamedTrait(traitdecoration(SizePseudoTransparent(t)), name), kwargs...)
+        end
+    end
+
 end
 
 refresh()
