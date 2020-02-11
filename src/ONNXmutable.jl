@@ -9,7 +9,7 @@ using Setfield
 using Statistics
 import Pkg
 import JuMP: @variable, @constraint
-import NaiveNASflux.NaiveNASlib.compconstraint!
+import NaiveNASflux.NaiveNASlib: compconstraint!, all_in_Δsize_graph
 
 export onnx
 
