@@ -51,7 +51,7 @@ function calc_outsize(r::Reshape, invertex)
     outshape = r.dims[r.adim]
     outshape == 0 && return nout(invertex)
     outshape isa Integer && return outshape
-    outshape isa Colon && return 0 # Must be fixed later...
+    outshape isa Colon && return 0 # Must be set later...
     error("Unknown outshape: " + outshape)
 end
 
@@ -144,7 +144,7 @@ Flattens input array along `dim` to a 2D array.
 
 If input has shape `(d_1, d_2, ... d_n)` then the output will have shape `(d_1 X d_2 ... d_(dim-1), d_dim X d_(dim+1) ... X dn)`.
 
-If `dim = 1` (or 0), the shape of the output is `(1, (d_0 X d_1 ... d_n)`, where the shape of the input is `(d_0, d_1, ... d_n)`.
+If `dim = 0`, the shape of the output is `(d_1 X d_2 ... d_n, 1)`, where the shape of the input is `(d_0, d_1, ... d_n)`.
 """
 struct Flatten
     dim::Int
@@ -152,8 +152,10 @@ end
 
 (f::Flatten)(x) = flatten(x, f.dim)
 function flatten(x, dim)
+    dim == 0 && return reshape(x, :, 1)
     xs = size(x)
-    return reshape(x, prod(xs[1:dim]), prod(xs[dim+1:end]))
+    absdim = dim < 0 ? length(xs) + dim : dim
+    return reshape(x, prod(xs[1:absdim]), prod(xs[absdim+1:end]))
 end
 
 function NaiveNASlib.mutate_inputs(f::Flatten, ins) end
@@ -166,13 +168,16 @@ NaiveNASflux.layer(f::Flatten) = f
 NaiveNASflux.actdim(f::Flatten) = 1
 NaiveNASflux.actrank(f::Flatten) = 1
 
+calc_outsize(f::Flatten, invertex) = 0 # Must be set later...
+
 function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, f::Flatten, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
     for iv in ins
         inadim = unique(actdim(iv))[] # Should be one element or else we are fked
-        @show inadim
-        @show f.dim
-        if inadim <= f.dim
+
+        absdim = f.dim > 0 ? f.dim : f.dim + unique(actrank(iv))[] + 1 # Should be one element or else we are fked
+
+        if f.dim == 0 || inadim <= absdim
             # Size of input affect output size
             @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] / nout(data.vertex) ==  data.noutdict[iv] / nout(iv))
         end

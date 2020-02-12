@@ -94,6 +94,30 @@ git-tree-sha1 = "19caaf6edff423661a9f9d4ef36662347c379246"
 [test_elu_example]
 git-tree-sha1 = "b88d134f0df7db13e569658dd27d210b930f650a"
 
+[test_flatten_axis0]
+git-tree-sha1 = "e502055049bff8f511719cfe0ba160e4af960afe"
+
+[test_flatten_axis1]
+git-tree-sha1 = "6d5a711cbef968da29b23cc558bb02d2a6d4d66d"
+
+[test_flatten_axis2]
+git-tree-sha1 = "4fdd09c583e091c95add891eb61a20ca11ee58d3"
+
+[test_flatten_axis3]
+git-tree-sha1 = "34c745ba3bd551ca0877f7d825e3350cf2f2b330"
+
+[test_flatten_default_axis]
+git-tree-sha1 = "7f96d893bb8e8cd5c44bd0644220a77492cfefe5"
+
+[test_flatten_negative_axis1]
+git-tree-sha1 = "d57c383df287dd62d3c03841b5600c433ed6ee9d"
+
+[test_flatten_negative_axis2]
+git-tree-sha1 = "f3d9885f0d8da816e774ab6dc8c811de737480bd"
+
+[test_flatten_negative_axis3]
+git-tree-sha1 = "87ace02ae832ed8dceb948da3dc10772d4fa971f"
+
 [test_gemm_all_attributes]
 git-tree-sha1 = "a596ce98b4cd3b54ba25a1019abab37de53387ca"
 

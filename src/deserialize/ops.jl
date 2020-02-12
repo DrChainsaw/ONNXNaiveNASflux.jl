@@ -190,6 +190,12 @@ pseudotransparentops[:Reshape] = function(params, shape)
     return Reshape(shape_t)
 end
 
+pseudotransparentops[:Flatten] = function(params)
+    dim = -get(params,:axis, 1)
+    return Flatten(dim)
+end
+
+
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     indims = length(inshape)

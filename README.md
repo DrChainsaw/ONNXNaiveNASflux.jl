@@ -61,6 +61,7 @@ Concat
 Conv
 Dropout
 Elu
+Flatten
 Gemm
 GlobalAveragePool
 LSTM

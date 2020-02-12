@@ -180,15 +180,15 @@
         end
 
         @testset "Flatten 4D dim 0" begin
-            g = tg(1, 0)
+            g = tg(80, 4)
 
-            @test size(g(ones(5,2,3,2))) == (4, 80)
+            @test size(g(ones(5,2,3,2))) == (4, 1)
 
-            Δnout(vertices(g)[2], -2)
+            Δnout(vertices(g)[2], -3)
             apply_mutation(g)
 
-            @test nout.(vertices(g)) == [3, 2, 1, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 40)
+            @test nout.(vertices(g)) == [3, 1, 20, 4]
+            @test size(g(ones(5,2,3,2))) == (4, 1)
         end
 
         @testset "Flatten 4D dim 1" begin
@@ -237,6 +237,54 @@
 
             @test nout.(vertices(g)) == [3, 1, 20, 4]
             @test size(g(ones(5,2,3,2))) == (4, 1)
+        end
+
+        @testset "Flatten 4D dim -4" begin
+            g = tg(1, -4)
+
+            @test size(g(ones(5,2,3,2))) == (4, 80)
+
+            Δnout(vertices(g)[2], -2)
+            apply_mutation(g)
+
+            @test nout.(vertices(g)) == [3, 2, 1, 4]
+            @test size(g(ones(5,2,3,2))) == (4, 40)
+        end
+
+        @testset "Flatten 4D dim -3" begin
+            g = tg(5, -3)
+
+            @test size(g(ones(5,2,3,2))) == (4, 16)
+
+            Δnout(vertices(g)[2], 3)
+            apply_mutation(g)
+
+            @test nout.(vertices(g)) == [3, 7, 5, 4]
+            @test size(g(ones(5,2,3,2))) == (4, 28)
+        end
+
+        @testset "Flatten 4D dim -2" begin
+            g = tg(10, -2)
+
+            @test size(g(ones(5,2,3,2))) == (4, 8)
+
+            Δnout(vertices(g)[2], -1)
+            apply_mutation(g)
+
+            @test nout.(vertices(g)) == [3, 3, 10, 4]
+            @test size(g(ones(5,2,3,2))) == (4, 6)
+        end
+
+        @testset "Flatten 4D dim -1" begin
+            g = tg(40, -1)
+
+            @test size(g(ones(5,2,3,2))) == (4, 2)
+
+            Δnout(vertices(g)[2], -2)
+            apply_mutation(g)
+
+            @test nout.(vertices(g)) == [3, 2, 20, 4]
+            @test size(g(ones(5,2,3,2))) == (4, 2)
         end
     end
 end

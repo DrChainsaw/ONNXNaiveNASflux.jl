@@ -117,6 +117,14 @@ end
 
 @testset "Invariant op $(tc.name)" for tc in
     (
+    (name="test_flatten_axis0", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_axis1", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_axis2", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_axis3", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_default_axis", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_negative_axis1", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_negative_axis2", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_negative_axis3", ninputs=1, noutputs=1, fd=pseudotransparentops),
     (name="test_globalaveragepool", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_globalaveragepool_precomputed", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_reduce_mean_default_axes_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),

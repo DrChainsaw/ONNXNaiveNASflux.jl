@@ -414,3 +414,21 @@ function Base.reshape(pp::AbstractProbe, shape::Tuple)
     return newfrom(pp, fname, fshape)
 end
 expanddims(p::AbstractProbe, x, dims) = p
+
+function flatten(pp::AbstractProbe, dim)
+    fname = recursename("Flatten", nextname(pp))
+
+    add!(pp, ONNX.Proto.NodeProto(
+        input=[name(pp)],
+        output=[fname],
+        name=fname,
+        attribute = [ONNX.Proto.AttributeProto("axis", -dim)],
+        op_type="Flatten"))
+
+    fshape = function (s)
+        dim == 0 && return (aggshape(*, s), 1)
+        absdim = dim < 0 ? length(s) + dim : dim
+        return (aggshape(*, s[1:absdim]...), aggshape(*, s[absdim+1:end]))
+    end
+    return newfrom(pp, fname, fshape)
+end

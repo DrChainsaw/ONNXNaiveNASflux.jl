@@ -331,7 +331,7 @@
             end
 
             gp_nosizes =  graphproto(f, "x" => missing)
-            g_nosizes = CompGraph(serdeser(gp_nosizes)...)
+            g_nosizes = @test_logs (:warn, r"Mismatched input sizes found for vertex with name dense_0") CompGraph(serdeser(gp_nosizes)...)
 
             @test name.(vertices(g_nosizes)) == ["x", "dense_0", "dense_1"]
             @test g_nosizes(x) ≈ f(x)
@@ -491,6 +491,7 @@
                 return c.f(x...)
             end
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
+            NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
             g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
@@ -532,6 +533,7 @@
                 return c.f(x...)
             end
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
+            NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
             g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
@@ -619,6 +621,24 @@
             indata1 = reshape(collect(Float32, 1:3*4), nout(vins[1]), :)
             indata2 = indata1 .* -0.5
             @test g_org(indata1, indata2) == g_new(indata1, indata2)
+        end
+
+        @testset "Conv to reshape to Dense" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv", v0, 4, relu)
+            v2 = absorbvertex(ONNXmutable.Reshape((12, Colon())), 12, v1, traitdecoration = t -> NamedTrait(t, "reshape"))
+            v3 = dense("dense", v2, 3, elu)
+
+            test_named_graph(CompGraph(v0, v3), (2,3))
+        end
+
+        @testset "Conv to flatten to Dense" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv", v0, 4, relu)
+            v2 = absorbvertex(ONNXmutable.Flatten(3), 24, v1, traitdecoration = t -> NamedTrait(t, "flatten"))
+            v3 = dense("dense", v2, 3, elu)
+
+            test_named_graph(CompGraph(v0, v3), (2,3))
         end
     end
 
