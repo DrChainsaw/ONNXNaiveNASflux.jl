@@ -14,7 +14,7 @@ function extract(io::IO)
 end
 
 sizes(mp::ONNX.Proto.ModelProto) = sizes(mp.graph)
-sizes(gp::ONNX.Proto.GraphProto) = Dict(name.(gp.input) .=> size.(gp.input))
+sizes(gp::ONNX.Proto.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
 
 NaiveNASlib.name(vip::ONNX.Proto.ValueInfoProto) = vip.name
 
@@ -36,13 +36,39 @@ NaiveNASlib.CompGraph(m::ONNX.Types.Model, sizes, vfun = create_vertex_default) 
 function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes, vfun = create_vertex_default)
    gb = CompGraphBuilder(g, sizes)
    outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(g.output), gb), vfun)
-   return CompGraph(gb.inputs, outputs)
+   graph = CompGraph(gb.inputs, outputs)
+   fix_outsizes!.(vertices(graph), gb)
+   return graph
 end
 
 NaiveNASlib.name(vi::ONNX.Types.ValueInfo) = vi.name
 NaiveNASlib.inputs(n::ONNX.Types.Node) = n.input
 NaiveNASlib.outputs(n::ONNX.Types.Node) = n.output
 optype(n::ONNX.Types.Node) = Symbol(n.op_type)
+
+fix_outsizes!(v::AbstractVertex, gb) = fix_outsizes!(base(v), gb)
+function fix_outsizes!(v::InputVertex, gb) end
+function fix_outsizes!(v::CompVertex, gb) end
+function fix_outsizes!(v::MutationVertex, gb)
+   if nout(v) == 0
+      outs = outputs(v)
+      if !isempty(outs)
+         vo = first(outs)
+         ind = findfirst(==(v), inputs(vo))
+         startnout = nin(vo)[ind]
+         Δnout(op(v), startnout)
+         NaiveNASlib.reset_out!(op(v))
+      elseif name(v) in keys(gb.sizes)
+         # Beware! Uninitialized sizes result random sizes when loaded?!?!
+         # Lets avoid too big sizes
+         startnout = gb.sizes[name(v)][first(actdim(v))]
+         if startnout < 1e8
+            Δnout(op(v), startnout)
+            NaiveNASlib.reset_out!(op(v))
+         end
+      end
+   end
+end
 
 """
    vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
