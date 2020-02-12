@@ -71,6 +71,7 @@ ReduceMean
 Relu
 Reshape
 Selu
+Softmax
 Squeeze
 Tanh
 ```

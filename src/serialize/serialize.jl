@@ -342,6 +342,8 @@ Flux.relu(pp::AbstractProbe) = attribfun(identity, "Relu", pp)
 Flux.elu(pp::AbstractProbe, α=1f0) = attribfun(identity, "Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
 Flux.selu(pp::AbstractProbe) = attribfun(identity, "Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun(identity, "Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
+Flux.softmax(pp::AbstractProbe; dims) = attribfun(identity, "Softmax", pp; attributes=[ONNX.Proto.AttributeProto("axis", flux2numpydim(dims[end], ndims(pp)))])
+
 (l::Flux.MaxPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "MaxPool", pp; attributes = attribs(l))
 (l::Flux.MeanPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])

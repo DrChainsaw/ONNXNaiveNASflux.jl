@@ -144,6 +144,13 @@ end
     (name="test_reshape_reordered_last_dims", ninputs=2, noutputs=1, fd=pseudotransparentops),
     (name="test_reshape_zero_and_negative_dim", ninputs=2, noutputs=1, fd=pseudotransparentops),
     (name="test_reshape_zero_dim", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_softmax_axis_0", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_axis_1", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_axis_2", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_default_axis", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_example", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_large_number", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_negative_axis", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops)
     )

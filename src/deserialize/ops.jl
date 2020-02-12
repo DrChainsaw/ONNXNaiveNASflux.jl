@@ -185,6 +185,14 @@ invariantops[:ReduceMean] = function(params)
 end
 expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 
+invariantops[:Softmax] = function(params)
+    np_axis = get(params, :axis, 1)
+    return function(x)
+        dims = Tuple(1:numpy2fluxdim(np_axis, ndims(x)))
+        Flux.softmax(x; dims=dims)
+    end
+end
+
 pseudotransparentops[:Reshape] = function(params, shape)
     shape_t = Tuple(reverse(replace(shape, -1 => Colon())))
     return Reshape(shape_t)
