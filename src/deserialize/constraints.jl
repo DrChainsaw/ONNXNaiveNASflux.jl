@@ -29,8 +29,8 @@ end
 
 """
     Reshape{T}
-    Reshape(dims...; activation_dim=actdim(length(dims)))
-    Reshape(dims; activation_dim=actdim(length(dims)))
+    Reshape(dims...; activation_dim=actdim(guess_layertype(length(dims))))
+    Reshape(dims; activation_dim=actdim(guess_layertype(length(dims))))
 
 Reshape operation wrapped in a struct for the sole purpose of handling size changes in neighbouring vertices.
 
@@ -38,7 +38,7 @@ Ensures that changes in output size of the input vertex are possible to reshape 
 
 Will treat `Integer`s in dims as fixed, meaning that if `dims[activation_dim] isa Integer` the input size of the output vertices will be fixed as well.
 """
-struct Reshape{T}
+mutable struct Reshape{T}
     adim::Int
     dims::T
 end
@@ -57,7 +57,13 @@ end
 
 
 function NaiveNASlib.mutate_inputs(r::Reshape, ins) end
-function NaiveNASlib.mutate_outputs(r::Reshape, outs) end
+function NaiveNASlib.mutate_outputs(r::Reshape{<:Tuple}, outs)
+    r.dims = Tuple(map(enumerate(r.dims)) do (i, s)
+        s isa Colon && return s
+        i == r.adim && return length(outs)
+        return s
+    end)
+end
 
 NaiveNASlib.minΔninfactor(r::Reshape) = minimum(filter(dim -> dim isa Integer && dim != 0, collect(r.dims)))
 NaiveNASlib.minΔnoutfactor(r::Reshape) = minΔninfactor(r)
@@ -66,7 +72,10 @@ NaiveNASflux.layer(r::Reshape) = r
 NaiveNASflux.actdim(r::Reshape) = r.adim
 NaiveNASflux.actrank(r::Reshape) = length(r.dims)
 
-# What about compconstraint for NaiveNASlib.AbstractJuMPSelectionStrategy? Ugh... I give up! Should be treated as SizeAbsorb, i.e no attempt to map elements between input and outputs.
+# What about compconstraint for NaiveNASlib.AbstractJuMPSelectionStrategy? Ugh... I give up! Will be treated as SizeAbsorb, i.e no attempt to map elements between input and outputs.
+
+# Special case: Reshape to 2D with variable batch size. Maybe a more general case when this is ok is hiding here somewhere...
+NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape{Tuple{Int, Colon}}, data) = reshape_nout_constraint(s, Colon(), r, filter(vin -> vin in keys(data.noutdict), inputs(data.vertex)), data)
 
 function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))

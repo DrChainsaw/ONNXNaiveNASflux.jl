@@ -126,8 +126,8 @@
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
-            @test nout.(vertices(g)) == [3, 5, 5, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 20)
+            @test nout.(vertices(g)) == [3, 8, 10, 4]
+            @test size(g(ones(5,2,3,2))) == (4, 16)
         end
 
         @testset "Reshape 4D -> 2D variable nout" begin
