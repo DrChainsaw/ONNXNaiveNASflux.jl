@@ -59,7 +59,7 @@ function fix_outsizes!(v::MutationVertex, gb)
          Δnout(op(v), startnout)
          NaiveNASlib.reset_out!(op(v))
       elseif name(v) in keys(gb.sizes)
-         # Beware! Uninitialized sizes result random sizes when loaded?!?!
+         # Beware! Uninitialized sizes result in random sizes when loaded?!?!
          # Lets avoid too big sizes
          startnout = gb.sizes[name(v)][first(actdim(v))]
          if startnout < 1e8

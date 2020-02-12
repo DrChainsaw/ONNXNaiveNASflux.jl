@@ -1,4 +1,6 @@
 
+# Stuff in here should probably move to NaiveNASflux once mature enough...
+
 
 struct SizePseudoTransparent <: NaiveNASlib.DecoratingTrait
     base::NaiveNASlib.MutationTrait
@@ -108,8 +110,8 @@ function reshape_nout_constraint(s, outsize::Integer, r, ins, data)
 
         fix_size = true
         for iv in ins
-            inrank = unique(actrank(iv))[] # Should be one or else we are fked
-            inadim = unique(actdim(iv))[] # Should be one or else we are fked
+            inrank = unique(actrank(iv))[] # Should be one element or else we are fked
+            inadim = unique(actdim(iv))[] # Should be one element or else we are fked
 
             if inrank - length(r.dims) + r.adim + 1== inadim
                 # Dimension to keep size of happens to be input layers activation dimension.
@@ -131,4 +133,49 @@ end
 # Case 2: Outsize is not fixed so we need to change it so that the output vertices change their input size
 function reshape_nout_constraint(s, outsize::Colon, r, ins, data)
     @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] / nout(data.vertex) == data.noutdict[ins[i]] / nout(ins[i]))
+end
+
+
+"""
+    Flatten
+    Flatten(dim)
+
+Flattens input array along `dim` to a 2D array.
+
+If input has shape `(d_1, d_2, ... d_n)` then the output will have shape `(d_1 X d_2 ... d_(dim-1), d_dim X d_(dim+1) ... X dn)`.
+
+If `dim = 1` (or 0), the shape of the output is `(1, (d_0 X d_1 ... d_n)`, where the shape of the input is `(d_0, d_1, ... d_n)`.
+"""
+struct Flatten
+    dim::Int
+end
+
+(f::Flatten)(x) = flatten(x, f.dim)
+function flatten(x, dim)
+    xs = size(x)
+    return reshape(x, prod(xs[1:dim]), prod(xs[dim+1:end]))
+end
+
+function NaiveNASlib.mutate_inputs(f::Flatten, ins) end
+function NaiveNASlib.mutate_outputs(f::Flatten, outs) end
+
+NaiveNASlib.minΔninfactor(f::Flatten) = 1
+NaiveNASlib.minΔnoutfactor(f::Flatten) = 1
+
+NaiveNASflux.layer(f::Flatten) = f
+NaiveNASflux.actdim(f::Flatten) = 1
+NaiveNASflux.actrank(f::Flatten) = 1
+
+function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, f::Flatten, data)
+    ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
+    for iv in ins
+        inadim = unique(actdim(iv))[] # Should be one element or else we are fked
+        @show inadim
+        @show f.dim
+        if inadim <= f.dim
+            # Size of input affect output size
+            @constraint(data.model, [i=1:length(ins)], data.noutdict[data.vertex] / nout(data.vertex) ==  data.noutdict[iv] / nout(iv))
+        end
+        # else: Size of input affects batch size => no constraint needed
+    end
 end
