@@ -65,7 +65,10 @@ function NaiveNASlib.mutate_outputs(r::Reshape{<:Tuple}, outs)
     end)
 end
 
-NaiveNASlib.minΔninfactor(r::Reshape) = minimum(filter(dim -> dim isa Integer && dim != 0, collect(r.dims)))
+function NaiveNASlib.minΔninfactor(r::Reshape)
+    valdims = filter(dim -> dim isa Integer && dim != 0, collect(r.dims))
+    return isempty(valdims) ? 1 : minimum(valdims)
+end
 NaiveNASlib.minΔnoutfactor(r::Reshape) = minΔninfactor(r)
 
 NaiveNASflux.layer(r::Reshape) = r
