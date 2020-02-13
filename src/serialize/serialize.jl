@@ -342,6 +342,8 @@ Flux.relu(pp::AbstractProbe) = attribfun(identity, "Relu", pp)
 Flux.elu(pp::AbstractProbe, α=1f0) = attribfun(identity, "Elu", pp; attributes = [ONNX.Proto.AttributeProto("alpha", α)])
 Flux.selu(pp::AbstractProbe) = attribfun(identity, "Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun(identity, "Selu", pp; attributes = ONNX.Proto.AttributeProto.(["gamma", "alpha"], [γ, α]))
+Flux.softmax(pp::AbstractProbe; dims) = attribfun(identity, "Softmax", pp; attributes=[ONNX.Proto.AttributeProto("axis", flux2numpydim(dims[end], ndims(pp)))])
+
 (l::Flux.MaxPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "MaxPool", pp; attributes = attribs(l))
 (l::Flux.MeanPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
@@ -414,3 +416,21 @@ function Base.reshape(pp::AbstractProbe, shape::Tuple)
     return newfrom(pp, fname, fshape)
 end
 expanddims(p::AbstractProbe, x, dims) = p
+
+function flatten(pp::AbstractProbe, dim)
+    fname = recursename("Flatten", nextname(pp))
+
+    add!(pp, ONNX.Proto.NodeProto(
+        input=[name(pp)],
+        output=[fname],
+        name=fname,
+        attribute = [ONNX.Proto.AttributeProto("axis", -dim)],
+        op_type="Flatten"))
+
+    fshape = function (s)
+        dim == 0 && return (aggshape(*, s), 1)
+        absdim = dim < 0 ? length(s) + dim : dim
+        return (aggshape(*, s[1:absdim]...), aggshape(*, s[absdim+1:end]))
+    end
+    return newfrom(pp, fname, fshape)
+end

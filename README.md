@@ -61,6 +61,7 @@ Concat
 Conv
 Dropout
 Elu
+Flatten
 Gemm
 GlobalAveragePool
 LSTM
@@ -70,6 +71,7 @@ ReduceMean
 Relu
 Reshape
 Selu
+Softmax
 Squeeze
 Tanh
 ```

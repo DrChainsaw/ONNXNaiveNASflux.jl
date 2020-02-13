@@ -14,7 +14,7 @@ function extract(io::IO)
 end
 
 sizes(mp::ONNX.Proto.ModelProto) = sizes(mp.graph)
-sizes(gp::ONNX.Proto.GraphProto) = Dict(name.(gp.input) .=> size.(gp.input))
+sizes(gp::ONNX.Proto.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
 
 NaiveNASlib.name(vip::ONNX.Proto.ValueInfoProto) = vip.name
 
@@ -36,13 +36,65 @@ NaiveNASlib.CompGraph(m::ONNX.Types.Model, sizes, vfun = create_vertex_default) 
 function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes, vfun = create_vertex_default)
    gb = CompGraphBuilder(g, sizes)
    outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(g.output), gb), vfun)
-   return CompGraph(gb.inputs, outputs)
+   graph = CompGraph(gb.inputs, outputs)
+   fix_zerosizes!.(outputs, gb)
+   return graph
 end
 
 NaiveNASlib.name(vi::ONNX.Types.ValueInfo) = vi.name
 NaiveNASlib.inputs(n::ONNX.Types.Node) = n.input
 NaiveNASlib.outputs(n::ONNX.Types.Node) = n.output
 optype(n::ONNX.Types.Node) = Symbol(n.op_type)
+
+fix_zerosizes!(v::AbstractVertex, gb) = fix_zerosizes!(base(v), gb)
+function fix_zerosizes!(v::InputVertex, gb) end
+function fix_zerosizes!(v::CompVertex, gb) end
+function fix_zerosizes!(v::MutationVertex, gb)
+
+    if nout(v) == 0
+        outs = outputs(v)
+        if !isempty(outs)
+            vo = first(outs)
+            ind = findfirst(==(v), inputs(vo))
+            startnout = nin(vo)[ind]
+            Δnout(op(v), startnout)
+            NaiveNASlib.reset_out!(op(v))
+        elseif name(v) in keys(gb.sizes)
+            # Beware! Uninitialized sizes result in random sizes when loaded?!?!
+            # Lets avoid too big sizes
+            startnout = gb.sizes[name(v)][first(actdim(v))]
+            if startnout < 1e8
+                Δnout(op(v), startnout)
+                NaiveNASlib.reset_out!(op(v))
+            end
+        end
+    end
+
+    for (ind, curr_insize) in enumerate(nin(v))
+        found_insize = findinsize(layertype(v), v, ind, gb)
+        if curr_insize == 0 && found_insize != 0
+            toset = zeros(Int, length(nin(v)))
+            toset[ind] = found_insize
+            Δnin(op(v), toset...)
+            NaiveNASlib.reset_in!(op(v))
+        elseif curr_insize != found_insize
+            @warn "Mismatched input sizes found for vertex with name $(name(v)) and layertype $(layertype(v)): $curr_insize vs $(found_insize)! Graph mutation near this vertex might not work"
+        end
+        fix_zerosizes!(inputs(v)[ind], gb)
+    end
+end
+
+function findinsize(lt, v, in_index, gb)
+    insize = nout(inputs(v)[in_index])
+    insize != 0 && return insize
+
+
+    fix_zerosizes!(inputs(v)[in_index], gb)
+    return nout(inputs(v)[in_index])
+end
+findinsize(::FluxParLayer, v, in_index, gb) = nin(layer(v))
+
+
 
 """
    vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)

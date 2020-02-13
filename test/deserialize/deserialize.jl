@@ -1,4 +1,4 @@
-import ONNXmutable: fluxlayers, actfuns, invariantops, optype, params
+import ONNXmutable: fluxlayers, actfuns, invariantops, pseudotransparentops, optype, params
 using NaiveNASflux
 
 @testset "Read padding" begin
@@ -117,34 +117,49 @@ end
 
 @testset "Invariant op $(tc.name)" for tc in
     (
-    (name="test_globalaveragepool", ninputs=1, noutputs=1),
-    (name="test_globalaveragepool_precomputed", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_default_axes_keepdims_example", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_default_axes_keepdims_random", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_do_not_keepdims_example", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_do_not_keepdims_random", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_keepdims_example", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_keepdims_random", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_negative_axes_keepdims_example", ninputs=1, noutputs=1),
-    (name="test_reduce_mean_negative_axes_keepdims_random", ninputs=1, noutputs=1),
-    (name="test_reshape_extended_dims", ninputs=2, noutputs=1),
-    (name="test_reshape_negative_dim", ninputs=2, noutputs=1),
-    (name="test_reshape_negative_extended_dims", ninputs=2, noutputs=1),
-    (name="test_reshape_one_dim", ninputs=2, noutputs=1),
-    (name="test_reshape_reduced_dims", ninputs=2, noutputs=1),
-    (name="test_reshape_reordered_all_dims", ninputs=2, noutputs=1),
-    (name="test_reshape_reordered_last_dims", ninputs=2, noutputs=1),
-    (name="test_reshape_zero_and_negative_dim", ninputs=2, noutputs=1),
-    (name="test_reshape_zero_dim", ninputs=2, noutputs=1),
-    (name="test_squeeze", ninputs=1, noutputs=1),
-    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1)
+    (name="test_flatten_axis0", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_axis1", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_axis2", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_axis3", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_default_axis", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_negative_axis1", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_negative_axis2", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_flatten_negative_axis3", ninputs=1, noutputs=1, fd=pseudotransparentops),
+    (name="test_globalaveragepool", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_globalaveragepool_precomputed", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_default_axes_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_default_axes_keepdims_random", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_do_not_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_do_not_keepdims_random", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_keepdims_random", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_negative_axes_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reduce_mean_negative_axes_keepdims_random", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_reshape_extended_dims", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_negative_dim", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_negative_extended_dims", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_one_dim", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_reduced_dims", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_reordered_all_dims", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_reordered_last_dims", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_zero_and_negative_dim", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_reshape_zero_dim", ninputs=2, noutputs=1, fd=pseudotransparentops),
+    (name="test_softmax_axis_0", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_axis_1", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_axis_2", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_default_axis", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_example", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_large_number", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_softmax_negative_axis", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_squeeze", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops)
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
-        @test haskey(invariantops, optype(node))
-        op = invariantops[optype(node)](node.attribute, params(node, gb)...)
+        @test haskey(tc.fd, optype(node))
+        op = tc.fd[optype(node)](node.attribute, params(node, gb)...)
         res = op(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
