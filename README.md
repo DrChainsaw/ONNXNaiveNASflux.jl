@@ -17,6 +17,15 @@ Pkg.add("https://github.com/DrChainsaw/ONNXmutable.jl")
 Serialization is done using the `onnx` function which accepts a filename `String` or an `IO` as first argument:
 
 ```julia
+# Save model as model.onnx where inputshapes are tuples with sizes of input
+onnx("model.onnx", model, inputshapes...)
+
+# Load model as a CompGraph
+graph = CompGraph("model.onnx")
+```
+More elaborate example:
+
+```julia
 using ONNXmutable, NaiveNASflux, Test
 
 l1 = Conv((3,3), 2=>3, relu)
@@ -64,6 +73,7 @@ Elu
 Flatten
 Gemm
 GlobalAveragePool
+GlobalMaxPool
 LSTM
 MaxPool
 RNN

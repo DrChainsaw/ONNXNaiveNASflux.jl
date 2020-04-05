@@ -155,6 +155,14 @@ function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MeanPool(size(x)[1:N-2])(x))
 end
 
+invariantops[:GlobalMaxPool] = function(params)
+    wrap = get(params, :wrap, identity)
+    return x -> globalmaxpool(x, wrap)
+end
+function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
+    wrap(MaxPool(size(x)[1:N-2])(x))
+end
+
 invariantops[:Squeeze] = function(params)
     np_axes = get(params, :axes, missing)
     dimfun = ismissing(np_axes) ? x -> Tuple(findall(i -> i == 1, size(x))) : x -> Tuple(numpy2fluxdim.(np_axes, ndims(x)))
