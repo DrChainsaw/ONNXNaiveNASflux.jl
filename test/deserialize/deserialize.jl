@@ -127,6 +127,8 @@ end
     (name="test_flatten_negative_axis3", ninputs=1, noutputs=1, fd=pseudotransparentops),
     (name="test_globalaveragepool", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_globalaveragepool_precomputed", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_globalmaxpool", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_globalmaxpool_precomputed", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_reduce_mean_default_axes_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_reduce_mean_default_axes_keepdims_random", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_reduce_mean_do_not_keepdims_example", ninputs=1, noutputs=1, fd=invariantops),

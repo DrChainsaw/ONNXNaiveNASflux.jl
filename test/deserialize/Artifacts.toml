@@ -157,6 +157,9 @@ git-tree-sha1 = "ab4fe680a849c9400261dcd24365c3e8449da525"
 [test_globalaveragepool_precomputed]
 git-tree-sha1 = "463e8afad38899f27f90b781515ef1e5aadf78d5"
 
+[test_globalmaxpool]
+git-tree-sha1 = "377710458916cc790bb7eec00c8e3f0719680cf8"
+
 [test_globalmaxpool_precomputed]
 git-tree-sha1 = "6d72b58370176351d46937ca3df65ba2fd114f04"
 

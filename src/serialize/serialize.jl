@@ -349,8 +349,11 @@ Flux.softmax(pp::AbstractProbe; dims) = attribfun(identity, "Softmax", pp; attri
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.Proto.AttributeProto("ratio", l.p)])
 
 
-function globalmeanpool(pp::AbstractProbe, wrap)
-     gpp = attribfun(s -> (1, 1, s[3:end]...), "GlobalAveragePool", pp)
+globalmeanpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalAveragePool")
+globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
+
+function globalpool(pp::AbstractProbe, wrap, type)
+     gpp = attribfun(s -> (1, 1, s[3:end]...), type, pp)
      ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
      wpp = wrap(ppnext)
      return newnamestrat(wpp, nextname(gpp))
