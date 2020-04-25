@@ -76,6 +76,7 @@ GlobalAveragePool
 GlobalMaxPool
 LSTM
 MaxPool
+Mul
 RNN
 ReduceMean
 Relu

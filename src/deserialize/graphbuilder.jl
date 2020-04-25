@@ -30,9 +30,10 @@ node(name::String, gb::CompGraphBuilder, parent=nothing) = get!(gb.allnodes, nam
 end
 nodes(gb::CompGraphBuilder) = keys(gb.allnodes)
 innames(n::ONNX.Types.Node, gb::CompGraphBuilder) = innames(Val(optype(n)), n, gb)
-innames(::Val, n::ONNX.Types.Node, gb::CompGraphBuilder) = inputs(n)[1:1]
+innames(::Val, n::ONNX.Types.Node, gb::CompGraphBuilder) = inputs(n)[1:min(1, length(inputs(n)))]
 innames(::Val{:Input}, ::ONNX.Types.Node, ::CompGraphBuilder) = []
 innames(::Val{:Add}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
+innames(::Val{:Mul}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
 innames(::Val{:Concat}, n::ONNX.Types.Node, ::CompGraphBuilder) = inputs(n)
 
 function outnames(n::ONNX.Types.Node, gb::CompGraphBuilder)

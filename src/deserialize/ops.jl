@@ -1,3 +1,4 @@
+const sources = Dict{Symbol, Any}()
 const actfuns = Dict{Symbol, Any}()
 const rnnactfuns = Dict{Symbol, Any}() # Recurrent layers have activation functions as attributes and use different parameter names compared to their respective operations.
 const actlayers = Dict{Symbol, Any}()
@@ -36,6 +37,9 @@ const verts = Dict{Symbol, Any}()
 
 # Functions which have dedicated vertex construction methods, such as Concat and Add end up in verts.
 
+
+sources[:Constant] = params -> constant(Val.(keys(params))..., values(params)...)
+constant(::Val{:value}, val) = ONNX.get_array(val)
 
 actfuns[:Relu] = params -> Flux.relu
 
@@ -223,6 +227,11 @@ end
 verts[:Add] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
     conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = layerfun, kwargs...)
     return NaiveNASlib.elemwise(+, conf, inputs...)
+end
+
+verts[:Mul] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
+    conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = layerfun, kwargs...)
+    return NaiveNASlib.elemwise(*, conf, inputs...)
 end
 
 verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)

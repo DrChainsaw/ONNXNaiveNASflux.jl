@@ -70,6 +70,9 @@ git-tree-sha1 = "bd9bb268f3fd3dab55bfc517f237b8217790e718"
 [test_concat_3d_axis_negative_3]
 git-tree-sha1 = "969e4d1aabba504ece2627202a8152978df318bf"
 
+[test_constant]
+git-tree-sha1 = "1e256bb41f808c86cf1722c73d2191f2d97fafc3"
+
 [test_conv_with_strides_and_asymmetric_padding]
 git-tree-sha1 = "c2b785eacbcf938239d08f380a4be522dd86c71b"
 
@@ -189,6 +192,9 @@ git-tree-sha1 = "eb755449c5688ff96ed956bbfc12955ead04f7bb"
 
 [test_maxpool_3d_default]
 git-tree-sha1 = "2205debb68c5adb316b1593d0d06e6a9d6d4be4d"
+
+[test_mul]
+git-tree-sha1 = "1a0d26115fa93c77b6db523bbde592f4cfa2c3e2"
 
 [test_reduce_mean_default_axes_keepdims_example]
 git-tree-sha1 = "8b1b6c99f2d997523cb53efc39c89dbab4b33623"

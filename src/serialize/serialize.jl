@@ -360,6 +360,7 @@ function globalpool(pp::AbstractProbe, wrap, type)
 end
 
 Base.:+(pps::AbstractProbe...) = attribfun(identity, "Add", pps...)
+Base.:*(pps::AbstractProbe...) = attribfun(identity, "Mul", pps...)
 
 
 function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
