@@ -544,6 +544,15 @@
             @test callcnt == nv(g_new) - 1
         end
 
+        @testset "Dense graph with constant scalar scaling" begin
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense1", v0, 4, elu)
+            v2 = fvertex("scale", v1, x -> 0.5f0 .* x)
+            v3 = dense("output", v2, 2, relu)
+
+            test_named_graph(CompGraph(v0, v3))
+        end
+
         @testset "Conv and batchnorm graph with cat" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv", v0, 2, elu)

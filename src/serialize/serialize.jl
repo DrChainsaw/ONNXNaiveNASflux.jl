@@ -327,8 +327,7 @@ Flux.elu(::ActivationAttributeProbe, α=1f0) = rnnactattribs("Elu", α)
 rnnactattribs(op::AbstractString, α=0f0, β=0f0) = rnnactattribs([op], [α], [β])
 rnnactattribs(ops::AbstractVector, αs, βs) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha", "activation_beta"], [ops, αs, βs])
 
-function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
-    lname = recursename(lowercase(optype), nextname(pps[1]))
+function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[], lname = recursename(lowercase(optype), nextname(pps[1])))
     add!(pps[1], ONNX.Proto.NodeProto(
     input = collect(name.(pps)),
     output = [lname],
@@ -361,6 +360,32 @@ end
 
 Base.:+(pps::AbstractProbe...) = attribfun(identity, "Add", pps...)
 Base.:*(pps::AbstractProbe...) = attribfun(identity, "Mul", pps...)
+
+# TODO: Fix type piracy!
+Base.:+(args::Union{AbstractProbe, Any}...) = elemwisefun("Add", args)
+Base.:*(args::Union{AbstractProbe, Any}...) = elemwisefun("Mul", args)
+
+function elemwisefun(optype, args::Union{AbstractProbe, Any})
+    # This mess is only to make sure we first draw the name of the op so that any constants base their name of it
+    anyprobe = args[findfirst(x -> isa(x, AbstractProbe), args)]
+    oname = recursename(lowercase(optype), nextname(anyprobe))
+    nf = name_runningnr()
+    refprobe = newnamestrat(anyprobe, f -> join([oname, nf(f)], "_"))
+    return attribfun(identity, optype, constant.(args, refprobe, nextname(anyprobe))...; lname=oname)
+end
+
+constant(x::AbstractProbe, ::AbstractProbe, ns) = x
+function constant(x, pp::AbstractProbe, ns)
+    cname = recursename("constant", nextname(pp))
+    add!(pp, ONNX.Proto.NodeProto(
+    input = [],
+    output = [cname],
+    name=cname,
+    attribute = ONNX.Proto.AttributeProto.(["value"], [ONNX.Proto.TensorProto(x, cname * "_value")]),
+    op_type= "Constant"))
+    ppo = newfrom(pp, cname, identity)
+    return newnamestrat(ppo, ns)
+end
 
 
 function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")

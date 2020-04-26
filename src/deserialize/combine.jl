@@ -6,6 +6,8 @@ struct ActivationLayer end
 
 struct RecurrentLayer end
 
+struct ElemwiseOp end
+
 """
    check_combine(gb::CompGraphBuilder, n::ONNX.Types.Node)
 
@@ -26,6 +28,8 @@ function optrait(vot::Val{ot}, n::ONNX.Types.Node) where ot
       ot in keys(fluxlayers) && return ActivationLayer()
       return vot
 end
+optrait(::Val{:Mul}, n::ONNX.Types.Node) = ElemwiseOp()
+optrait(::Val{:Add}, n::ONNX.Types.Node) = ElemwiseOp()
 
 retnode(n, gb) = n, innodes(n, gb)
 check_combine(x, n::ONNX.Types.Node, gb::CompGraphBuilder) = retnode(n, gb)
@@ -85,4 +89,20 @@ check_squeeze(nsqueeze::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Type
 function check_squeeze(nsqueeze::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Types.Node, ::RecurrentLayer)
    @debug "Remove squeeze after $innode"
    return retnode(innode, gb)
+end
+
+# For element wise operations, check if one of the inputs is a constant
+check_combine(::ElemwiseOp, n::ONNX.Types.Node, gb::CompGraphBuilder) = check_elemwise(n, gb, innodes(n, gb))
+
+function check_elemwise(nelemwise::ONNX.Types.Node, gb::CompGraphBuilder, innodes::AbstractVector{ONNX.Types.Node})
+   ins_to_process = filter(!isnothing, map(innode -> check_elemwise(nelemwise, gb, innode, optrait(innode)), innodes))
+   return nelemwise, ins_to_process
+end
+
+check_elemwise(nelemwise::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Types.Node, ot) = innode
+
+function check_elemwise(nelemwise::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Types.Node, ::Val{:Constant})
+   consts = get!(nelemwise.attribute, :Constant, [])
+   push!(consts, sources[optype(innode)](innode.attribute, params(innode, gb)...))
+   return nothing
 end

@@ -21,6 +21,7 @@ tp_tensor_elemtype(i::Integer) = i
 tp_tensor_elemtype(::Missing) = ONNX.Proto.TensorProto_DataType.UNDEFINED
 tp_tensor_elemtype(::Type{Float32}) = ONNX.Proto.TensorProto_DataType.FLOAT
 
+ONNX.Proto.TensorProto(x::Number, name ="") = ONNX.Proto.TensorProto([x], name)
 ONNX.Proto.TensorProto(t::AbstractArray{Float32,N}, name ="") where N = ONNX.Proto.TensorProto(
     dims=collect(reverse(size(t))),
     data_type=ONNX.Proto.TensorProto_DataType.FLOAT,
@@ -81,4 +82,10 @@ ONNX.Proto.AttributeProto(name::String, strings::Vector{String}) where N = ONNX.
     name=name,
     _type = ONNX.Proto.AttributeProto_AttributeType.STRINGS,
     strings = Vector{UInt8}.(strings)
+)
+
+ONNX.Proto.AttributeProto(name::String, tensor::ONNX.Proto.TensorProto) where N = ONNX.Proto.AttributeProto(
+    name=name,
+    _type = ONNX.Proto.AttributeProto_AttributeType.TENSOR,
+    t = tensor
 )

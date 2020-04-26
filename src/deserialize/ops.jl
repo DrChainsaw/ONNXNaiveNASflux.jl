@@ -39,7 +39,8 @@ const verts = Dict{Symbol, Any}()
 
 
 sources[:Constant] = params -> constant(Val.(keys(params))..., values(params)...)
-constant(::Val{:value}, val) = ONNX.get_array(val)
+constant(::Val{:value}, val::ONNX.Proto.TensorProto) = ONNX.get_array(val)
+constant(::Val{:value}, val) = val
 
 actfuns[:Relu] = params -> Flux.relu
 
@@ -224,15 +225,18 @@ verts[:Input] = function(name, inputs, params; kwargs...)
     return inputvertex(name, insize, ltype)
 end
 
-verts[:Add] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
-    conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = layerfun, kwargs...)
-    return NaiveNASlib.elemwise(+, conf, inputs...)
+verts[:Add] = (name, inputs, params; kwargs...) -> elemwisevertex(name, inputs, params, +, 0; kwargs...)
+verts[:Mul] = (name, inputs, params; kwargs...) -> elemwisevertex(name, inputs, params, *, 1; kwargs...)
+
+
+function elemwisevertex(name, inputs, params, op, id; traitdecoration=identity, layerfun=identity, kwargs...)
+    c = reduce((c1,c2) -> op.(c1, c2), get(params, :Constant, id))
+    c = length(c) == 1 ? c[] : c
+    opp, wrap = c == id ? (op, layerfun) : (identity, f -> layerfun((x...) -> op.(c, x...)))
+    conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = wrap, kwargs...)
+    return NaiveNASlib.elemwise(opp, conf, inputs...)
 end
 
-verts[:Mul] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
-    conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = layerfun, kwargs...)
-    return NaiveNASlib.elemwise(*, conf, inputs...)
-end
 
 verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
     dims = numpy2fluxdim(params[:axis], inputs[1])
