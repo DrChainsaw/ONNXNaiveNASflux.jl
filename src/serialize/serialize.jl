@@ -358,14 +358,56 @@ function globalpool(pp::AbstractProbe, wrap, type)
      return newnamestrat(wpp, nextname(gpp))
 end
 
-Base.:+(pps::AbstractProbe...) = attribfun(identity, "Add", pps...)
-Base.:*(pps::AbstractProbe...) = attribfun(identity, "Mul", pps...)
+# Generate explicit combinations as I couldn't figure out how to avoid type piracy with varargs: https://discourse.julialang.org/t/extend-a-varargs-function-for-mixed-types/38233
+function generate_elemwise(fm::Module, f, optype, argperms, m=@__MODULE__)
+    for argtypes in argperms
+        args = ntuple(i -> Symbol(:x, i), length(argtypes))
+        sig = map(zip(args, argtypes)) do (a, at)
+            isnothing(at) && return a
+            :($a::$at)
+        end
 
-# TODO: Fix type piracy!
-Base.:+(args::Union{AbstractProbe, Any}...) = elemwisefun("Add", args)
-Base.:*(args::Union{AbstractProbe, Any}...) = elemwisefun("Mul", args)
+        @eval m $fm.$f($(sig...)) = elemwisefun($optype, $(args...))
+    end
+end
 
-function elemwisefun(optype, args::Union{AbstractProbe, Any})
+"""
+    override_broadcast(f::F, argperms) where F
+
+Prevent broadcasting of `f` when invoked with any combination of argument types in argperms.
+
+Needed because broadcasting happens inside several ONNX operations.
+
+For example, `[1,2,3] .+ 4` shall translate to `Add([1,2,3], 4)`, not as `Add(1, 4)`, `Add(2, 4)` and `Add(3, 4)`. One way to accomplish this is to override broadcasting when an `AbstractProbe` is one of the inputs.
+"""
+function override_broadcast(f::F, argperms, m=@__MODULE__) where F
+    Broadcast.Broadcasted
+    for Args in (Tuple{args...} for args in argperms)
+        @eval m begin
+            Base.Broadcast.Broadcasted(f::$F, args::$Args, axes=nothing) = $f(unwrap_broadcast.(args)...)
+            Base.Broadcast.Broadcasted{Style}(f::$F, args::$Args, axes=nothing) where Style = $f(unwrap_broadcast.(args)...)
+        end
+    end
+end
+unwrap_broadcast(x) = x
+unwrap_broadcast(x::Ref) = x.x
+
+dummyfun(x,y) = "dummy $x"
+
+argpermutations(n, args...) = Iterators.product(ntuple(_ -> args, n)...)
+argpermswith(t, n::Integer, args...) = (a for a in argpermutations(n, t, args...) if t in a)
+
+function gen_broadcastable_elemwise(f, optype, n=2)
+    fs = Symbol(f)
+    fm = which(ONNXmutable, fs)
+    generate_elemwise(fm, fs, optype, argpermswith(AbstractProbe, n, nothing))
+    override_broadcast(f, argpermswith(Base.RefValue{<:AbstractProbe}, n, AbstractArray))
+end
+
+gen_broadcastable_elemwise(+, "Add")
+gen_broadcastable_elemwise(*, "Mul")
+
+function elemwisefun(optype, args...)
     # This mess is only to make sure we first draw the name of the op so that any constants base their name of it
     anyprobe = args[findfirst(x -> isa(x, AbstractProbe), args)]
     oname = recursename(lowercase(optype), nextname(anyprobe))
