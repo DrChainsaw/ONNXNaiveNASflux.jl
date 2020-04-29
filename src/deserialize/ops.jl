@@ -273,6 +273,13 @@ function refresh()
         end
     end
 
+    for (s,f) in sources
+        verts[s] = function(name, inputs, args...;kwargs...)
+            @assert isempty(inputs) "Source of type $s got inputs $(inputs)!"
+            return sourcevertex_with_outputs(f(args...), name)
+        end
+    end
+
 end
 
 refresh()

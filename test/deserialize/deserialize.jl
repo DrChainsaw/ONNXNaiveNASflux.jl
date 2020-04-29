@@ -17,13 +17,28 @@ end
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
-    node = gb.g.node[]
-    @test haskey(sources, optype(node))
-    res = sources[optype(node)](node.attribute, params(node, gb)...)
+    @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
+        @test haskey(sources, optype(node))
+        res = sources[optype(node)](node.attribute, params(node, gb)...)
 
-    @test size(res) == size(outputs[1])
-    @test res ≈ outputs[1]
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+    end
 
+    @testset "$(tc.name) graph" begin
+        cg = CompGraph(model, sizes)
+        res = cg()
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg()
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+    end
 end
 
 # For testing since ONNX states that recurrent layers take 3D input while flux uses

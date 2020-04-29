@@ -140,7 +140,6 @@ nextshape(p::AbstractProbe, f::Function) = nextshape(shape(p), f)
 nextshape(::Missing, f::Function) = missing
 nextshape(s::Tuple, f::Function) = f(s)
 
-
 add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
 function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
@@ -195,9 +194,21 @@ function graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningn
 
     outpps = f(pps...)
 
-    add_output!.(outpps)
+    add_outputs!(gp, namestrat, outpps)
 
     return gp
+end
+add_outputs!(gp, ns, x) = add_outputs!(gp, ns, (x,))
+add_outputs!(gp, ns, pps::NTuple{N, AbstractProbe}) where N  = add_output!.(pps)
+function add_outputs!(gp, namestrat, pps::Tuple)
+    # At least one of the outputs was not an AbstractProbe
+    # This is probably because one of them is a constant
+    # If there is at least one AbstractProbe we here assume that one contains the GraphProto for the non-constant ops
+    anyprobeind = findfirst(x -> isa(x, AbstractProbe), pps)
+    tempprobe = isnothing(anyprobeind) ? ProtoProbe("template", tuple(), namestrat, gp) : pps[anyprobeind]
+
+    output_pps = constant.(pps, tempprobe, namestrat)
+    add_output!.(output_pps)
 end
 
 # Only purpose is to snag the name in case this is the naming strategy

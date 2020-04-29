@@ -269,6 +269,15 @@
 
         fvertex(name, inpt::AbstractVertex, f) = invariantvertex(f, inpt; traitdecoration = t -> NamedTrait(t, name))
 
+        test_outputs(res::Tuple, exp, sizediff=0) = test_outputs(res[1], exp, sizediff)
+        test_outputs(res::Tuple, exp::Tuple, sizediff=0) = test_outputs.(res, exp, sizediff)
+        function test_outputs(res, exp, sizediff=0)
+            # Fix for differences in recurrent shapes. Flux ises 2D and onnx uses 3D
+            resadj = dropdims(res, dims=Tuple(ndims(res)-sizediff+1:ndims(res)))
+            @test size(resadj) == size(exp)
+            @test resadj ≈ exp
+        end
+
         function test_named_graph(g_org, extradims = ())
             gp_org = graphproto(g_org)
             gp_org.name="testmodel"
@@ -288,18 +297,15 @@
             expout = g_org(indata)
             resout = g_new(indata)
 
-            @test size(expout) == size(resout)
-            @test expout ≈ resout
+            test_outputs(resout, expout)
 
             # For FLux recurrent layers as they accept 2D input but ONNX wants 3D input
             sizediff = length(ONNXmutable.shape(g_new.inputs[])) - ndims(indata)
             indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
 
-            ortout, = onnxruntime_infer(g_org, indata)
-            ortout = dropdims(ortout, dims=Tuple(ndims(ortout)-sizediff+1:ndims(ortout)))
-
-            @test size(ortout) == size(expout)
-            @test ortout ≈ expout
+            ortout = onnxruntime_infer(g_org, indata)
+            
+            test_outputs(ortout, expout, sizediff)
 
             return g_new
         end
@@ -562,6 +568,16 @@
             test_named_graph(CompGraph(v0, v3))
         end
 
+        @testset "Dense graph with free constant" begin
+            import ONNXmutable: sourcevertex_with_outputs
+            v0 = inputvertex("input", 3, FluxDense())
+            v1 = dense("dense", v0, 2, elu)
+            # Constant must be array for generic check to pass as ONNX opset only supports constant tensors
+            # Name is not preserved when serializing SourceVertex. We just sneakily set it to what the autoselected name will be
+            v2 =  sourcevertex_with_outputs([213], "constant")
+
+            test_named_graph(CompGraph([v0], [v1,v2]))
+        end
 
         @testset "Conv and batchnorm graph with cat" begin
             v0 = inputvertex("input", 3, FluxConv{2}())

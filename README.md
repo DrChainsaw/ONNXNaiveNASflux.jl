@@ -67,6 +67,7 @@ Add
 AveragePool
 BatchNormalization
 Concat
+Constant
 Conv
 Dropout
 Elu
