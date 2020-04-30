@@ -1,4 +1,4 @@
-import ONNXmutable: fluxlayers, actfuns, invariantops, pseudotransparentops, optype, params
+import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, params
 using NaiveNASflux
 
 @testset "Read padding" begin
@@ -8,6 +8,37 @@ using NaiveNASflux
     @test prev([1,2]) == [1,2]
     @test prev([1,2,3,4]) == [2,4,1,3]
     @test prev([1,2,3,4,5,6]) == [3,6,2,5,1,4]
+end
+
+@testset "Sources" for tc in
+    (
+    (name="test_constant", ninputs=0, noutputs=1),
+    )
+
+    model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+
+    @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
+        @test haskey(sources, optype(node))
+        res = sources[optype(node)](node.attribute, params(node, gb)...)
+
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+    end
+
+    @testset "$(tc.name) graph" begin
+        cg = CompGraph(model, sizes)
+        res = cg()
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+
+        # Also test that it we get the same thing by serializing and then deserializing
+        io = PipeBuffer()
+        onnx(io, cg)
+        cg = CompGraph(io)
+        res = cg()
+        @test size(res) == size(outputs[1])
+        @test res ≈ outputs[1]
+    end
 end
 
 # For testing since ONNX states that recurrent layers take 3D input while flux uses
@@ -199,6 +230,7 @@ end
     (name="test_concat_3d_axis_negative_1", ninputs=2, noutputs=1),
     (name="test_concat_3d_axis_negative_2", ninputs=2, noutputs=1),
     (name="test_concat_3d_axis_negative_3", ninputs=2, noutputs=1),
+    (name="test_mul", ninputs=2, noutputs=1),
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)

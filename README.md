@@ -67,6 +67,7 @@ Add
 AveragePool
 BatchNormalization
 Concat
+Constant
 Conv
 Dropout
 Elu
@@ -76,6 +77,7 @@ GlobalAveragePool
 GlobalMaxPool
 LSTM
 MaxPool
+Mul
 RNN
 ReduceMean
 Relu

@@ -140,7 +140,6 @@ nextshape(p::AbstractProbe, f::Function) = nextshape(shape(p), f)
 nextshape(::Missing, f::Function) = missing
 nextshape(s::Tuple, f::Function) = f(s)
 
-
 add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
 function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
@@ -195,9 +194,21 @@ function graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningn
 
     outpps = f(pps...)
 
-    add_output!.(outpps)
+    add_outputs!(gp, namestrat, outpps)
 
     return gp
+end
+add_outputs!(gp, ns, x) = add_outputs!(gp, ns, (x,))
+add_outputs!(gp, ns, pps::NTuple{N, AbstractProbe}) where N  = add_output!.(pps)
+function add_outputs!(gp, namestrat, pps::Tuple)
+    # At least one of the outputs was not an AbstractProbe
+    # This is probably because one of them is a constant
+    # If there is at least one AbstractProbe we here assume that one contains the GraphProto for the non-constant ops
+    anyprobeind = findfirst(x -> isa(x, AbstractProbe), pps)
+    tempprobe = isnothing(anyprobeind) ? ProtoProbe("template", tuple(), namestrat, gp) : pps[anyprobeind]
+
+    output_pps = constant.(pps, tempprobe, namestrat)
+    add_output!.(output_pps)
 end
 
 # Only purpose is to snag the name in case this is the naming strategy
@@ -327,8 +338,7 @@ Flux.elu(::ActivationAttributeProbe, α=1f0) = rnnactattribs("Elu", α)
 rnnactattribs(op::AbstractString, α=0f0, β=0f0) = rnnactattribs([op], [α], [β])
 rnnactattribs(ops::AbstractVector, αs, βs) = ONNX.Proto.AttributeProto.(["activations", "activation_alpha", "activation_beta"], [ops, αs, βs])
 
-function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[])
-    lname = recursename(lowercase(optype), nextname(pps[1]))
+function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Proto.AttributeProto[], lname = recursename(lowercase(optype), nextname(pps[1])))
     add!(pps[1], ONNX.Proto.NodeProto(
     input = collect(name.(pps)),
     output = [lname],
@@ -359,7 +369,76 @@ function globalpool(pp::AbstractProbe, wrap, type)
      return newnamestrat(wpp, nextname(gpp))
 end
 
-Base.:+(pps::AbstractProbe...) = attribfun(identity, "Add", pps...)
+# Generate explicit combinations as I couldn't figure out how to avoid type piracy with varargs: https://discourse.julialang.org/t/extend-a-varargs-function-for-mixed-types/38233
+function generate_elemwise(fm::Module, f, optype, argperms, m=@__MODULE__)
+    for argtypes in argperms
+        args = ntuple(i -> Symbol(:x, i), length(argtypes))
+        sig = map(zip(args, argtypes)) do (a, at)
+            isnothing(at) && return a
+            :($a::$at)
+        end
+
+        @eval m $fm.$f($(sig...)) = elemwisefun($optype, $(args...))
+    end
+end
+
+"""
+    override_broadcast(f::F, argperms) where F
+
+Prevent broadcasting of `f` when invoked with any combination of argument types in argperms.
+
+Needed because broadcasting happens inside several ONNX operations.
+
+For example, `[1,2,3] .+ 4` shall translate to `Add([1,2,3], 4)`, not as `Add(1, 4)`, `Add(2, 4)` and `Add(3, 4)`. One way to accomplish this is to override broadcasting when an `AbstractProbe` is one of the inputs.
+"""
+function override_broadcast(f::F, argperms, m=@__MODULE__) where F
+    Broadcast.Broadcasted
+    for Args in (Tuple{args...} for args in argperms)
+        @eval m begin
+            Base.Broadcast.Broadcasted(f::$F, args::$Args, axes=nothing) = $f(unwrap_broadcast.(args)...)
+            Base.Broadcast.Broadcasted{Style}(f::$F, args::$Args, axes=nothing) where Style = $f(unwrap_broadcast.(args)...)
+        end
+    end
+end
+unwrap_broadcast(x) = x
+unwrap_broadcast(x::Ref) = x.x
+
+dummyfun(x,y) = "dummy $x"
+
+argpermutations(n, args...) = Iterators.product(ntuple(_ -> args, n)...)
+argpermswith(t, n::Integer, args...) = (a for a in argpermutations(n, t, args...) if t in a)
+
+function gen_broadcastable_elemwise(f, optype, n=2)
+    fs = Symbol(f)
+    fm = which(ONNXmutable, fs)
+    generate_elemwise(fm, fs, optype, argpermswith(AbstractProbe, n, nothing))
+    override_broadcast(f, argpermswith(Base.RefValue{<:AbstractProbe}, n, AbstractArray))
+end
+
+gen_broadcastable_elemwise(+, "Add")
+gen_broadcastable_elemwise(*, "Mul")
+
+function elemwisefun(optype, args...)
+    # This mess is only to make sure we first draw the name of the op so that any constants base their name of it
+    anyprobe = args[findfirst(x -> isa(x, AbstractProbe), args)]
+    oname = recursename(lowercase(optype), nextname(anyprobe))
+    nf = name_runningnr()
+    refprobe = newnamestrat(anyprobe, f -> join([oname, nf(f)], "_"))
+    return attribfun(identity, optype, constant.(args, refprobe, nextname(anyprobe))...; lname=oname)
+end
+
+constant(x::AbstractProbe, ::AbstractProbe, ns) = x
+function constant(x, pp::AbstractProbe, ns)
+    cname = recursename("constant", nextname(pp))
+    add!(pp, ONNX.Proto.NodeProto(
+    input = [],
+    output = [cname],
+    name=cname,
+    attribute = ONNX.Proto.AttributeProto.(["value"], [ONNX.Proto.TensorProto(x, cname * "_value")]),
+    op_type= "Constant"))
+    ppo = newfrom(pp, cname, identity)
+    return newnamestrat(ppo, ns)
+end
 
 
 function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")

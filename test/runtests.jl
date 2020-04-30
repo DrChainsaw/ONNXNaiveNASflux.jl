@@ -5,6 +5,7 @@ using Test
 
     @info "Test Deserialization"
     @testset "Deserialize" begin
+        include("deserialize/vertex.jl")
         include("deserialize/constraints.jl")
         include("deserialize/testdata.jl")
         include("deserialize/deserialize.jl")

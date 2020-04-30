@@ -49,6 +49,7 @@ optype(n::ONNX.Types.Node) = Symbol(n.op_type)
 fix_zerosizes!(v::AbstractVertex, gb) = fix_zerosizes!(base(v), gb)
 function fix_zerosizes!(v::InputVertex, gb) end
 function fix_zerosizes!(v::CompVertex, gb) end
+function fix_zerosizes!(v::SourceVertex, gb) end
 function fix_zerosizes!(v::MutationVertex, gb)
 
     if nout(v) == 0
@@ -108,12 +109,17 @@ function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_d
          n_create, ins = check_combine(gb, n)
          invertices = map(ni -> vertex(gb, ni, vfun), ins)
          v = vfun(gb, n_create, invertices)
-         if isempty(nin(v))
+         if is_input(v)
             push!(gb.inputs, v)
          end
          return v
       end
 end
+
+is_input(v::AbstractVertex) = is_input(base(v))
+is_input(v::InputVertex) = true
+is_input(v::CompVertex) = false
+is_input(v::SourceVertex) = false
 
 
 create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)

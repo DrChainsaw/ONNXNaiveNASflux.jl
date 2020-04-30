@@ -15,6 +15,7 @@ end
 isnamed(v::AbstractVertex) = isnamed(base(v))
 isnamed(v::CompVertex) = false
 isnamed(v::InputVertex) = true
+isnamed(v::SourceVertex) = true
 isnamed(v::MutationVertex) = isnamed(trait(v))
 isnamed(t::DecoratingTrait) = isnamed(base(t))
 isnamed(t) = false
