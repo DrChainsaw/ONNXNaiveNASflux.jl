@@ -35,7 +35,7 @@ NaiveNASlib.nout_org(v::OutputsVertex) = nout_org(base(v))
 NaiveNASlib.inputs(::SourceVertex) = AbstractVertex[]
 
 NaiveNASlib.minΔninfactor_only_for(v::SourceVertex,s=[]) = missing
-NaiveNASlib.minΔninfactor_only_for(v::SourceVertex,s=[]) = missing
+NaiveNASlib.minΔnoutfactor_only_for(v::SourceVertex,s=[]) = missing
 
 function sourcevertex_with_outputs(data, name)
     sv = SourceVertex(data, name)
