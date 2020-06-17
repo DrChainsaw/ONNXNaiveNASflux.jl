@@ -254,7 +254,10 @@ function refresh()
     end
 
     for (s, f) in actfuns
-        invariantops[s] = f
+        invariantops[s] = function(args...;kwargs...)
+                                actfun = f(args...; kwargs...)
+                                return x -> actfun.(x)
+                            end
     end
 
     for (s, f) in fluxlayers

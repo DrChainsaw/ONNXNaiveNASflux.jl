@@ -37,7 +37,7 @@ function get_artifact(name, location, ninputs, noutputs, rcnt=5)
             ahash = create_artifact() do artifact_dir
                 mkpath(joinpath(artifact_dir, "test_data_set_0"))
 
-                download(joinpath(location, "model.onnx"), joinpath(artifact_dir, "model.onnx"))
+                download(location * "/model.onnx", joinpath(artifact_dir, "model.onnx"))
                 for i in 0:ninputs-1
                     download(inputfile(location, i), inputfile(artifact_dir, i))
                 end
@@ -66,8 +66,8 @@ function throttle_download(location, waittime=0.5)
 end
 
 
-inputfile(apath, i) = joinpath(apath, "test_data_set_0",  join(["input_", i, ".pb"]))
-outputfile(apath, i) = joinpath(apath, "test_data_set_0",  join(["output_", i, ".pb"]))
+inputfile(apath, i) = apath * "/test_data_set_0" * "/" * join(["input_", i, ".pb"])
+outputfile(apath, i) = apath * "/test_data_set_0" * "/" * join(["output_", i, ".pb"])
 
 readinput(apath, i) = readdata(inputfile(apath, i))
 readoutput(apath, i) = readdata(outputfile(apath, i))

@@ -143,6 +143,11 @@ end
         @test haskey(actfuns, optype(node))
         op = actfuns[optype(node)](node.attribute, params(node, gb)...)
         @test op.(inputs[1]) ≈ outputs[1]
+
+        @test haskey(invariantops, optype(node))
+        bcop = invariantops[optype(node)](node.attribute, params(node, gb)...)
+        @test bcop(inputs[1]) ≈ outputs[1]
+
     end
 end
 

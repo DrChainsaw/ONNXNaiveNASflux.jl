@@ -40,7 +40,7 @@ check_combine(::ActivationFunction, n::ONNX.Types.Node, gb::CompGraphBuilder) = 
 
 check_actfun(nact::ONNX.Types.Node, gb::CompGraphBuilder, args...) = retnode(nact, gb)
 check_actfun(nact::ONNX.Types.Node, gb::CompGraphBuilder, nlayer::ONNX.Types.Node) = check_actfun(nact, gb, nlayer, optrait(nlayer))
-check_actfun(nact::ONNX.Types.Node, gb::CompGraphBuilder, nlayer::ONNX.Types.Node, ::ActivationLayer) = wrapfrom(nact, nlayer, gb, :activation)
+check_actfun(nact::ONNX.Types.Node, gb::CompGraphBuilder, nlayer::ONNX.Types.Node, ::ActivationLayer) = wrapfrom(nact, nlayer, gb, :activation, actfuns)
 
 function wrapfrom(nwrap::ONNX.Types.Node, nwrapped::ONNX.Types.Node, gb::CompGraphBuilder, attrib, from::AbstractDict=invariantops)
    @debug "Merge node $nwrap and node $nwrapped"
@@ -56,7 +56,7 @@ check_combine(::Val{:Reshape}, n::ONNX.Types.Node, gb::CompGraphBuilder) = check
 check_reshape(nreshape::ONNX.Types.Node, gb::CompGraphBuilder, args...) = retnode(nreshape, gb)
 check_reshape(nreshape::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Types.Node) = check_reshape(nreshape, gb, innode, optrait(innode))
 
-check_reshape(nreshape::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Types.Node, ::Val{:GlobalAveragePool}) = wrapfrom(nreshape, innode, gb, :wrap)
+check_reshape(nreshape::ONNX.Types.Node, gb::CompGraphBuilder, innode::ONNX.Types.Node, ::Val{:GlobalAveragePool}) = wrapfrom(nreshape, innode, gb, :wrap, pseudotransparentops)
 
 check_reshape(nreshape::ONNX.Types.Node, gb::CompGraphBuilder, nrec::ONNX.Types.Node, ::RecurrentLayer) = check_recurrent_reshape(nreshape, gb, nrec)
 check_reshape(nreshape::ONNX.Types.Node, gb::CompGraphBuilder, nsqueeze::ONNX.Types.Node, ::Val{:Squeeze}) = check_recurrent_reshape(nreshape, gb, innodes(nsqueeze, gb)...)

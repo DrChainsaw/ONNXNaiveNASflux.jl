@@ -38,11 +38,11 @@
         ONNXmutable.name(p::NodeProbe) = p.name
 
         @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
-            (op=:Relu, attr = Dict(), fd=invariantops),
-            (op=:Elu, attr = Dict(), fd=invariantops),
-            (op=:Elu, attr = Dict(:alpha => 0.5f0), fd=invariantops),
-            (op=:Selu, attr = Dict(), fd=invariantops),
-            (op=:Selu, attr = Dict(:alpha => 1.5f0), fd=invariantops),
+            (op=:Relu, attr = Dict(), fd=actfuns),
+            (op=:Elu, attr = Dict(), fd=actfuns),
+            (op=:Elu, attr = Dict(:alpha => 0.5f0), fd=actfuns),
+            (op=:Selu, attr = Dict(), fd=actfuns),
+            (op=:Selu, attr = Dict(:alpha => 1.5f0), fd=actfuns),
             (op=:GlobalAveragePool, attr=Dict(), fd=invariantops),
             (op=:MaxPool, attr=Dict(:kernel_shape=>(1,2), :pads=>(2,1), :strides=>(2,2)), fd=fluxlayers),
             (op=:AveragePool, attr=Dict(:kernel_shape=>(3,2), :pads=>(1,0), :strides=>(2,2)), fd=fluxlayers),
