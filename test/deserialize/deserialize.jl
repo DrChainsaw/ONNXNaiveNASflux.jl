@@ -105,14 +105,14 @@ end
         @test haskey(fluxlayers, optype(node))
         op = fluxlayers[optype(node)](node.attribute, params(node, gb)...)
 
-        res = op(inputs[1])
+        res = op(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin
         cg = CompGraph(model, sizes)
-        res = cg(inputs[1])
+        res = cg(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
@@ -120,7 +120,7 @@ end
         io = PipeBuffer()
         onnx(io, cg)
         cg = CompGraph(io)
-        res = cg(inputs[1])
+        res = cg(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
