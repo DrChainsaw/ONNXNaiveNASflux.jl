@@ -173,6 +173,39 @@
             @test ortout ≈ expout
         end
 
+        @testset "$(tc.layer) node no bias no act" for tc in (
+            (layer=Dense(randn(Float32, 2,3), Flux.Zeros()), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
+            (layer=Conv((1,1), 2=>3; bias=Flux.Zeros(3)), indata=reshape(collect(Float32, 1:2*3), 1,1,2,3) .- 3),
+            )
+            ONNXmutable.shape(p::NodeProbe) = missing
+
+            inprobe = NodeProbe("input", genname)
+
+            outprobe = tc.layer(inprobe)
+
+            @test length(outprobe.protos) == 2
+
+            wp,lp= Tuple(outprobe.protos)
+
+            ln = serdeser(lp)
+            w = serdeser(wp)
+
+            @test size(w) == size(weights(tc.layer))
+            @test w ≈ ONNXmutable.flipweights(layertype(tc.layer), weights(tc.layer))
+
+            res = fluxlayers[optype(ln)](ln.attribute, w)
+
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, tc.indata)
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
+        end
+
         @testset "$(tc.layer) node" for tc in (
             (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
             (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
@@ -304,7 +337,7 @@
             indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
 
             ortout = onnxruntime_infer(g_org, indata)
-            
+
             test_outputs(ortout, expout, sizediff)
 
             return g_new
