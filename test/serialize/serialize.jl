@@ -144,7 +144,7 @@
 
             @test length(outprobe.protos) == 4
 
-            lp,wp,bp,ap = Tuple(outprobe.protos)
+            wp,bp,lp,ap = Tuple(outprobe.protos)
 
             ln = serdeser(lp)
             an = serdeser(ap)
@@ -186,7 +186,7 @@
 
             @test length(outprobe.protos) == 5
 
-            lp,wip,whp,bp = Tuple(outprobe.protos)
+            wip,whp,bp,lp = Tuple(outprobe.protos)
 
             ln = serdeser(lp)
             wi = serdeser(wip)

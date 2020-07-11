@@ -225,19 +225,26 @@ function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.Proto.Att
     lname = recursename(l, nextname(pp))
     wname, bname = lname .* ("_weight", "_bias")
 
+    add!(pp, ONNX.Proto.TensorProto(flipweights(lt, weights(l)), wname))
+    inputnames = addbias!(lt, pp, bias(l), bname, [name(pp), wname])
+
     add!(pp, ONNX.Proto.NodeProto(
-        input=[name(pp), wname, bname],
+        input=inputnames,
         output=[lname],
         name=lname,
         attribute = attributes,
         op_type=optype))
-    add!(pp, ONNX.Proto.TensorProto(flipweights(lt, weights(l)), wname))
-    add!(pp, ONNX.Proto.TensorProto(bias(l), bname))
 
     ppl = newfrom(pp, lname, s -> outshape(l, s))
     ppout = actfun(lt, l)(newnamestrat(ppl, f -> join([lname, genname(f)], "_"), lname))
     return newnamestrat(ppout, nextname(ppl))
 end
+
+function addbias!(lt, pp, b, name, inputnames)
+    add!(pp, ONNX.Proto.TensorProto(b, name))
+    return vcat(inputnames, name)
+end
+addbias!(lt, pp, ::Flux.Zeros, name, inputnames) = inputnames
 
 function(l::Flux.Dense)(pp::AbstractProbe)
     ppl = pp
@@ -275,7 +282,7 @@ function(l::Flux.BatchNorm)(pp::AbstractProbe)
         attribute = ONNX.Proto.AttributeProto.(["epsilon", "momentum"], [l.ϵ, l.momentum]),
         op_type="BatchNormalization"))
     add!(pp, ONNX.Proto.TensorProto(l.γ, γname))
-    add!(pp, ONNX.Proto.TensorProto(l.β, βname))
+    add!(pp, ONNX.Proto.TensorProto(l.β, βname)) # Bias not optional for batchnorm
     add!(pp, ONNX.Proto.TensorProto(l.μ, μname))
     add!(pp, ONNX.Proto.TensorProto(l.σ², σ²name))
 
@@ -305,12 +312,8 @@ function recurrent_node(l, pp, optype)
     hsize = size(l.Wh, 2)
     hsattrib = ONNX.Proto.AttributeProto("hidden_size", hsize)
 
-    add!(pp, ONNX.Proto.NodeProto(
-        input=[name(pp), wname, rname, bname],
-        output=[lname],
-        name=lname,
-        attribute = push!(activation_attrib(l), hsattrib),
-        op_type=optype))
+    inputnames = [name(pp), wname, rname]
+
     # Flux weights are of shape [hidden_size, input_size]
     # ONNX wants them on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
     # To spice things up a bit, all julia arrays are saved in reverse order, i.e we need to create a TensorProto from an array with the arrangement [input_size, hidden_size, num_directions].
@@ -319,10 +322,21 @@ function recurrent_node(l, pp, optype)
     add!(pp, ONNX.Proto.TensorProto(reshape(Wi, size(Wi)...,1), wname))
     Wh = permutedims(flipweights(layertype(l), l.Wh, hsize))
     add!(pp, ONNX.Proto.TensorProto(reshape(Wh, size(Wh)..., 1), rname))
-    # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
-    # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
-    b = flipweights(layertype(l), reshape(l.b, :, 1), hsize)
-    add!(pp, ONNX.Proto.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
+
+    if !isa(l.b, Flux.Zeros)
+        # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
+        # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
+        b = flipweights(layertype(l), reshape(l.b, :, 1), hsize)
+        add!(pp, ONNX.Proto.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
+        push!(inputnames, bname)
+    end
+
+    add!(pp, ONNX.Proto.NodeProto(
+        input=inputnames,
+        output=[lname],
+        name=lname,
+        attribute = push!(activation_attrib(l), hsattrib),
+        op_type=optype))
 
     # ONNX wants num directions as an extra dimension to output
     return newfrom(pp, lname, s -> (nout(l), s[2], 1, s[end]))

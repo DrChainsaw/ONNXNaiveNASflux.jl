@@ -74,13 +74,13 @@ akpsd(params) = a2t.(_akpsd(params))
 a2t(x) = x
 a2t(a::AbstractArray) = Tuple(a)
 
-actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxConv{N-2}())))) where {T, N}
+actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros()) where {T, N}
     a,_,p,s,d = akpsd(params)
     @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
     return Conv(flipweights(FluxConv{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
 end
 
-actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=zeros(T, size(weight, outdim(FluxDense())))) where {T,N}
+actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros()) where {T,N}
     act = get(params, :activation, identity)
     wt = Bool(get(params, :transB, 0)) ? permutedims : identity
     α = get(params, :alpha, 1)
@@ -99,6 +99,7 @@ end
 
 default_Wb_Rb(Wh_WBh) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) * 2, size(Wh_WBh, 3))), 0)
 default_init_h(Wb_Rb, sc) = fill!(similar(Wb_Rb, (size(Wb_Rb,1) ÷ sc, size(Wb_Rb,2))), 0)
+# TODO when https://github.com/FluxML/Flux.jl/issues/1279 is resolved default_init_h(Wh_WBh, sc) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) ÷ sc, size(Wh_WBh, 3))), 0)
 
 fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
@@ -135,7 +136,7 @@ function recurrent_arrays(lt, Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     hsize = size(Wh_WBh, 1)
     Wi = unflipweights(lt, permutedims(dropdims(Wi_WBi, dims=3)), hsize)
     Wh = unflipweights(lt, permutedims(dropdims(Wh_WBh, dims=3)), hsize)
-    b = dropdims(unflipweights(lt, sum(reshape(Wb_Rb, :, 2), dims=2), hsize),dims=2)
+    b = Wb_Rb isa Flux.Zeros ? Wb_Rb : dropdims(unflipweights(lt, sum(reshape(Wb_Rb, :, 2), dims=2), hsize),dims=2)
     hs = (dropdims(h, dims=ndims(h)) for h in h3ds)
     return Wi, Wh, b, hs...
 end
