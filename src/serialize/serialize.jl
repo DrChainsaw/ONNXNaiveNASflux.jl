@@ -142,10 +142,8 @@ nextshape(s::Tuple, f::Function) = f(s)
 
 add!(gp::ONNX.Proto.GraphProto, np::ONNX.Proto.NodeProto) = push!(gp.node, np)
 
-function add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto)
-    push!(gp.initializer, tp)
-    push!(gp.input, ONNX.Proto.ValueInfoProto(tp.name, reverse(tp.dims), tp.data_type))
-end
+add!(gp::ONNX.Proto.GraphProto, tp::ONNX.Proto.TensorProto) = push!(gp.initializer, tp)
+
 
 """
     Used to get activation functions as [`ONNX.Proto.AttributeProto`](@ref)s.

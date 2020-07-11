@@ -64,7 +64,7 @@
     end
 
     @testset "Graph has a name" begin
-        gp = ONNX.Proto.GraphProto(;node=NodeProto[],input=ValueInfoProto[], output=ValueInfoProto[])
+        gp = ONNX.Proto.GraphProto(;node=NodeProto[],input=ValueInfoProto[], output=ValueInfoProto[],initializer=ONNX.Proto.TensorProto[],)
         mp = modelproto()
         mp.graph = gp
         @test_throws ErrorException hasname(mp)
