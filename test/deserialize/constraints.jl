@@ -23,13 +23,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(3, 15))) == (5,2,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
-            @test size(g(ones(3, 15))) == (5,2,4,3)
+            @test size(g(ones(Float32, 3, 15))) == (5,2,4,3)
         end
 
         @testset "Reshape 2D -> 4D variable shape" begin
@@ -44,13 +44,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(3, 15))) == (5,2,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
-            @test size(g(ones(3, 15))) == (5,3,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
         end
 
         @testset "Reshape 2D -> 4D variable nout" begin
@@ -65,13 +65,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(3, 15))) == (5,3,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
-            @test size(g(ones(3, 15))) == (5,3,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
         end
 
         @testset "Reshape 2D -> 4D variable nout 0-dim" begin
@@ -86,13 +86,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(3, 2))) == (2,5,4,2)
+            @test size(g(ones(Float32, 3, 2))) == (2,5,4,2)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 30, 3, 4]
-            @test size(g(ones(3, 2))) == (2,5,4,2)
+            @test size(g(ones(Float32, 3, 2))) == (2,5,4,2)
         end
 
         @testset "Reshape 2D -> 4D all fixed" begin
@@ -107,13 +107,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(3, 15))) == (5,2,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 4, 3, 4]
-            @test size(g(ones(3, 15))) == (5,2,4,2)
+            @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
         end
 
         @testset "Reshape 2D -> 4D all fixed 0-dim" begin
@@ -128,13 +128,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(3, 20))) == (5,2,4,2)
+            @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 6, 6, 4]
-            @test size(g(ones(3, 20))) == (5,2,4,2)
+            @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
         end
 
         @testset "Reshape 4D -> 2D variable batch" begin
@@ -149,13 +149,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(5,2,3,2))) == (4, 16)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 8, 10, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 16)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
         end
 
         @testset "Reshape 4D -> 2D variable nout" begin
@@ -170,13 +170,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(5,2,3,2))) == (4, 16)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
             @test_logs (:warn, r"Could not change nout") Δnout(v1, 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 16, 20, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 16)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
         end
 
         @testset "Reshape 4D -> 2D variable nout 0-dim" begin
@@ -191,13 +191,13 @@
 
             g = CompGraph(v0, v3)
 
-            @test size(g(ones(5,2,3,2))) == (4, 2)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 2)
 
             Δnout(v1, -2)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 2, 20, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 2)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 2)
         end
     end
 
@@ -222,109 +222,109 @@
         @testset "Flatten 4D dim 0" begin
             g = tg(80, 4)
 
-            @test size(g(ones(5,2,3,2))) == (4, 1)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 1)
 
             Δnout(vertices(g)[2], -3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 1, 20, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 1)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 1)
         end
 
         @testset "Flatten 4D dim 1" begin
             g = tg(5, 1)
 
-            @test size(g(ones(5,2,3,2))) == (4, 16)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
             Δnout(vertices(g)[2], 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 7, 5, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 28)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 28)
         end
 
         @testset "Flatten 4D dim 2" begin
             g = tg(10, 2)
 
-            @test size(g(ones(5,2,3,2))) == (4, 8)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 8)
 
             Δnout(vertices(g)[2], -1)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 3, 10, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 6)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 6)
         end
 
         @testset "Flatten 4D dim 3" begin
             g = tg(40, 3)
 
-            @test size(g(ones(5,2,3,2))) == (4, 2)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 2)
 
             Δnout(vertices(g)[2], -2)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 2, 20, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 2)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 2)
         end
 
         @testset "Flatten 4D dim 4" begin
             g = tg(80, 4)
 
-            @test size(g(ones(5,2,3,2))) == (4, 1)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 1)
 
             Δnout(vertices(g)[2], -3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 1, 20, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 1)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 1)
         end
 
         @testset "Flatten 4D dim -4" begin
             g = tg(1, -4)
 
-            @test size(g(ones(5,2,3,2))) == (4, 80)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 80)
 
             Δnout(vertices(g)[2], -2)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 2, 1, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 40)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 40)
         end
 
         @testset "Flatten 4D dim -3" begin
             g = tg(5, -3)
 
-            @test size(g(ones(5,2,3,2))) == (4, 16)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
             Δnout(vertices(g)[2], 3)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 7, 5, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 28)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 28)
         end
 
         @testset "Flatten 4D dim -2" begin
             g = tg(10, -2)
 
-            @test size(g(ones(5,2,3,2))) == (4, 8)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 8)
 
             Δnout(vertices(g)[2], -1)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 3, 10, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 6)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 6)
         end
 
         @testset "Flatten 4D dim -1" begin
             g = tg(40, -1)
 
-            @test size(g(ones(5,2,3,2))) == (4, 2)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 2)
 
             Δnout(vertices(g)[2], -2)
             apply_mutation(g)
 
             @test nout.(vertices(g)) == [3, 2, 20, 4]
-            @test size(g(ones(5,2,3,2))) == (4, 2)
+            @test size(g(ones(Float32, 5,2,3,2))) == (4, 2)
         end
     end
 end
