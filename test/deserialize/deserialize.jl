@@ -194,7 +194,6 @@ end
     )
 
     model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
-    inputs = collect.(inputs) # Workaround for https://github.com/FluxML/NNlib.jl/issues/222
 
     @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
         @test haskey(tc.fd, optype(node))
