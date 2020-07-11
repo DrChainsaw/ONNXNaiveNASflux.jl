@@ -198,12 +198,16 @@ invariantops[:ReduceMean] = function(params)
 end
 expanddims(out, x, dims) = fill(out, ntuple(i -> 1, ndims(x)))
 
-invariantops[:Softmax] = function(params)
-    np_axis = get(params, :axis, 1)
-    return function(x)
-        dims = Tuple(1:numpy2fluxdim(np_axis, ndims(x)))
-        Flux.softmax(x; dims=dims)
-    end
+invariantops[:Softmax] = params -> x -> onnxsoftmax(x; np_axis = get(params, :axis, 1))
+
+function onnxsoftmax(x::AbstractArray{T, 2}; np_axis=1) where T
+    dim = numpy2fluxdim(np_axis, 2)
+    Flux.softmax(x; dims=dim)
+end
+function onnxsoftmax(x::AbstractArray{T, N}; np_axis=1) where {T,N}
+    dim = numpy2fluxdim(np_axis, N)
+    sz = size(x)
+    reshape(Flux.softmax(reshape(x, prod(sz[1:dim]), :)), sz...)
 end
 
 pseudotransparentops[:Reshape] = function(params, shape)
