@@ -71,7 +71,7 @@ function inputused(gp::ONNX.Proto.GraphProto, or=error)
 end
 
 function ioused(gp::ONNX.Proto.GraphProto)
-    found = Set(name.(gp.input))
+    found = union(Set(name.(gp.input)), Set(name.(gp.initializer)))
     used = Set(name.(gp.output))
     for n in gp.node
         foreach(oname -> push!(found, oname), n.output)

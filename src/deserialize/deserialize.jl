@@ -17,6 +17,7 @@ sizes(mp::ONNX.Proto.ModelProto) = sizes(mp.graph)
 sizes(gp::ONNX.Proto.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
 
 NaiveNASlib.name(vip::ONNX.Proto.ValueInfoProto) = vip.name
+NaiveNASlib.name(tp::ONNX.Proto.TensorProto) = tp.name
 
 Base.size(vip::ONNX.Proto.ValueInfoProto) = size(vip._type)
 Base.size(tp::ONNX.Proto.TypeProto) = size(tp.tensor_type)
