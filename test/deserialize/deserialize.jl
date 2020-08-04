@@ -1,6 +1,9 @@
 import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, params
 using NaiveNASflux
 
+# Logging to avoid travis timeouts
+@info "  Test padding and sources"
+
 @testset "Read padding" begin
     import ONNXmutable: prev
 
@@ -56,6 +59,8 @@ function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T
     # In the testdata only the last output in the sequence is present in the reference
     return reshape(out, size(out)..., 1)
 end
+
+@info "  Test Flux layers"
 
 @testset "Fluxlayer $(tc.name)" for tc in
     (
@@ -126,6 +131,8 @@ end
     end
 end
 
+@info "  Test Flux activation functions"
+
 @testset "Activation functions $(tc.name)" for tc in
     (
     (name="test_elu", ninputs=1, noutputs=1),
@@ -150,6 +157,8 @@ end
 
     end
 end
+
+@info "  Test stateless ops"
 
 @testset "Invariant op $(tc.name)" for tc in
     (
