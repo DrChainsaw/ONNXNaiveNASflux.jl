@@ -1,4 +1,4 @@
-import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, params
+import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
 using NaiveNASflux
 
 # Logging to avoid travis timeouts
@@ -18,18 +18,18 @@ end
     (name="test_constant", ninputs=0, noutputs=1),
     )
 
-    model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+    model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
-    @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
+    @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(sources, optype(node))
-        res = sources[optype(node)](node.attribute, params(node, gb)...)
+        res = sources[optype(node)](node.attribute, params(node)...)
 
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model, sizes)
+        cg = CompGraph(model)
         res = cg()
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -104,11 +104,11 @@ end
     (name="test_rnn_seq_length", ninputs=4, noutputs=1),
     )
 
-    model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+    model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
-    @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
+    @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(fluxlayers, optype(node))
-        op = fluxlayers[optype(node)](node.attribute, params(node, gb)...)
+        op = fluxlayers[optype(node)](node.attribute, params(node)...)
 
         res = op(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
@@ -116,7 +116,7 @@ end
     end
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model, sizes)
+        cg = CompGraph(model)
         res = cg(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -144,15 +144,15 @@ end
     (name="test_selu_example", ninputs=1, noutputs=1),
     )
 
-    model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+    model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
-    @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
+    @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(actfuns, optype(node))
-        op = actfuns[optype(node)](node.attribute, params(node, gb)...)
+        op = actfuns[optype(node)](node.attribute, params(node)...)
         @test op.(inputs[1]) ≈ outputs[1]
 
         @test haskey(invariantops, optype(node))
-        bcop = invariantops[optype(node)](node.attribute, params(node, gb)...)
+        bcop = invariantops[optype(node)](node.attribute, params(node)...)
         @test bcop(inputs[1]) ≈ outputs[1]
 
     end
@@ -202,18 +202,18 @@ end
     (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops)
     )
 
-    model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+    model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
-    @testset "$(tc.name) op $(node.op_type)" for node in gb.g.node
+    @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(tc.fd, optype(node))
-        op = tc.fd[optype(node)](node.attribute, params(node, gb)...)
+        op = tc.fd[optype(node)](node.attribute, params(node)...)
         res = op(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model, sizes)
+        cg = CompGraph(model)
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -247,10 +247,10 @@ end
     (name="test_mul", ninputs=2, noutputs=1),
     )
 
-    model, sizes, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+    model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model, sizes)
+        cg = CompGraph(model)
         res = cg(inputs[1:length(cg.inputs)]...)
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]

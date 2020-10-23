@@ -110,7 +110,7 @@ function myfun(probes::AbstractProbe...)
     nodename = recursename(optype, nextname(p))
 
     # Add ONNX node info
-    add!(p, ONNX.Proto.NodeProto(
+    add!(p, ONNX.NodeProto(
     # Names of input is provided by probes. This is why new probes need to be provided as output
     input = collect(name.(probes)),
     # Name of output from this node

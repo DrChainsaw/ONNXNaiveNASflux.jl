@@ -14,5 +14,6 @@ matrix:
   fast_finish: true
 notifications:
   email: false
+before_install: julia -e 'using Pkg; Pkg.add(PackageSpec(url="https://github.com/DrChainsaw/BaseOnnx.jl", rev="onnxmutable"));' 
 after_success:
   - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'

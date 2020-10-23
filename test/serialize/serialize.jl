@@ -1,5 +1,6 @@
 
 @testset "Structure" begin
+    import ONNXmutable: OnnxNode, input, output, optype
 
     function serdeser(p::T, convfun = cfun(p)) where T
         iob = PipeBuffer();
@@ -7,15 +8,15 @@
         return convfun(ONNX.readproto(iob, T()))
     end
 
-    function serdeser(p::ONNX.Proto.ModelProto)
+    function serdeser(p::ONNX.ModelProto)
         iob = PipeBuffer();
         onnx(iob, p)
         return ONNXmutable.extract(iob)
     end
 
-    cfun(pt) = ONNX.convert
-    cfun(::ONNX.Proto.TensorProto) = ONNX.get_array
-    cfun(::ONNX.Proto.GraphProto) = gp -> (ONNX.convert(gp), ONNXmutable.sizes(gp))
+    cfun(::ONNX.NodeProto) = np -> OnnxNode(np, TensorProto[])
+    cfun(::ONNX.TensorProto) = Array
+    cfun(::ONNX.GraphProto) = identity
 
     include("onnxruntime.jl")
 
@@ -57,10 +58,10 @@
 
             res = serdeser(outprobe.protos[])
 
-            @test res.input == [name(inprobe)]
-            @test res.output == [name(outprobe)]
-            @test res.op_type == string(tc.op)
-            @test res.name == name(outprobe)
+            @test input(res) == [name(inprobe)]
+            @test output(res) == [name(outprobe)]
+            @test optype(res) == tc.op
+            @test name(res) == name(outprobe)
 
             mexprev(v, x) = x
             mexprev(v, x::Tuple) = reverse(x)
@@ -73,9 +74,9 @@
         end
 
         @testset "Dims method $(tc.ot)" for tc in (
-            (f=cat, dims=1, ndims=2, ot="Concat", axname=:axis),
-            (f=mean, dims=(2, 3), ndims=4, ot="ReduceMean", axname=:axes),
-            (f=dropdims, dims=(3,), ndims=3, ot="Squeeze", axname=:axes)
+            (f=cat, dims=1, ndims=2, ot=:Concat, axname=:axis),
+            (f=mean, dims=(2, 3), ndims=4, ot=:ReduceMean, axname=:axes),
+            (f=dropdims, dims=(3,), ndims=3, ot=:Squeeze, axname=:axes)
             )
             inprobe = NodeProbe("input", f -> "output")
             ONNXmutable.shape(p::NodeProbe) = Tuple(1:tc.ndims)
@@ -86,10 +87,10 @@
 
             res = serdeser(outprobe.protos[])
 
-            @test res.input == [name(inprobe)]
-            @test res.output == [name(outprobe)]
-            @test res.op_type == tc.ot
-            @test res.name == name(outprobe)
+            @test input(res) == [name(inprobe)]
+            @test output(res) == [name(outprobe)]
+            @test optype(res) == tc.ot
+            @test name(res) == name(outprobe)
             expdims = tc.dims isa Tuple ? collect(tc.dims) : tc.dims
             @test ONNXmutable.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
         end
@@ -112,10 +113,10 @@
 
             @test newshape == [-1, 2, 3, 0]
 
-            @test res.input == [name(inprobe), outprobe.protos[2].name]
-            @test res.output == [name(outprobe)]
-            @test res.op_type == "Reshape"
-            @test res.name == name(outprobe)
+            @test input(res) == [name(inprobe), outprobe.protos[2].name]
+            @test output(res) == [name(outprobe)]
+            @test optype(res) == :Reshape
+            @test name(res) == name(outprobe)
             @test ismissing(shapeout[end])
             @test collect(skipmissing(shapeout)) == [:A, 3, 2]
         end
@@ -315,9 +316,9 @@
             gp_org = graphproto(g_org)
             gp_org.name="testmodel"
             validate(modelproto(;graph=gp_org))
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes)
+            g_new = CompGraph(gt_new)
 
             @test name.(vertices(g_org)) == name.(vertices(g_new))
             @test nout.(vertices(g_org)) == nout.(vertices(g_new))
@@ -353,7 +354,7 @@
             end
 
             gp_sizes = graphproto(f, "x" => (2, missing), "y" => (2,))
-            g_sizes = CompGraph(serdeser(gp_sizes)...)
+            g_sizes = CompGraph(serdeser(gp_sizes))
 
             x = reshape(collect(Float32, 1:2*4), 2,4)
             y = Float32[5, 6]
@@ -370,7 +371,7 @@
             end
 
             gp_nosizes =  graphproto(f, "x" => missing)
-            g_nosizes = @test_logs (:warn, r"Mismatched input sizes found for vertex with name dense_0") CompGraph(serdeser(gp_nosizes)...)
+            g_nosizes = @test_logs (:warn, r"Mismatched input sizes found for vertex with name dense_0") CompGraph(serdeser(gp_nosizes))
 
             @test name.(vertices(g_nosizes)) == ["x", "dense_0", "dense_1"]
             @test g_nosizes(x) ≈ f(x)
@@ -394,9 +395,9 @@
             g_org = CompGraph(v0, v3)
 
             gp_org = graphproto(g_org)
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes)
+            g_new = CompGraph(gt_new)
 
             @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1", "dense_2"]
 
@@ -411,9 +412,9 @@
             g_org = CompGraph(v0, v2)
 
             gp_org = graphproto(g_org)
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes)
+            g_new = CompGraph(gt_new)
 
             @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1",]
 
@@ -450,9 +451,9 @@
             gp_org = graphproto(g_org)
             @test length(size(gp_org.output[])) == 2
 
-            gt_new, ss = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, ss)
+            g_new = CompGraph(gt_new)
             @test name.(vertices(g_new)) == ["input_0", "conv_0", "globalaveragepool_0"]
 
             indata = reshape(collect(Float32, 1:3*2*2*2), 2,2,3,2)
@@ -499,9 +500,9 @@
             g_org = CompGraph(v0, v3)
 
             gp_org = graphproto(g_org)
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes)
+            g_new = CompGraph(gt_new)
 
             @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1", "add_0"]
 
@@ -519,7 +520,7 @@
             g_org = CompGraph(v0, v3)
 
             gp_org = graphproto(g_org)
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
             callcnt = 0
             struct CntSpy <: AbstractMutableComp
@@ -532,7 +533,7 @@
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
             NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
-            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
+            g_new = CompGraph(gt_new, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
@@ -561,7 +562,7 @@
             g_org = CompGraph(v0, v4)
 
             gp_org = graphproto(g_org)
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
             callcnt = 0
             struct CntSpy <: AbstractMutableComp
@@ -574,7 +575,7 @@
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
             NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
-            g_new = CompGraph(gt_new, sizes, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
+            g_new = CompGraph(gt_new, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
@@ -632,9 +633,9 @@
             g_org = CompGraph(v0, v3)
 
             gp_org = graphproto(g_org)
-            gt_new, sizes = serdeser(gp_org)
+            gt_new = serdeser(gp_org)
 
-            g_new = CompGraph(gt_new, sizes)
+            g_new = CompGraph(gt_new)
 
             @test name.(vertices(g_new)) == ["input_0", "dense_0", "dense_1", "concat_0"]
 
@@ -657,7 +658,7 @@
             v3 = dense("dense", v2, 6, elu)
 
             g_org = CompGraph(v0, v3)
-            g_new = CompGraph(serdeser(graphproto(g_org))...)
+            g_new = CompGraph(serdeser(graphproto(g_org)))
 
             @test name.(vertices(g_new)) == name.(vertices(g_org))
 
@@ -682,7 +683,7 @@
             v2 = concat("conc", vins[1], vins[2])
 
             g_org = CompGraph(vins, [v1, v2])
-            g_new = CompGraph(serdeser(graphproto(g_org))...)
+            g_new = CompGraph(serdeser(graphproto(g_org)))
 
             @test name.(vertices(g_org)) == name.(vertices(g_new))
 
@@ -711,7 +712,7 @@
     end
 
     @testset "Models" begin
-        import ONNXmutable: modelproto
+        import ONNXmutable: modelproto, sizes
 
         @testset "Generic function infer" begin
             _f(x, y) = x .+ y
@@ -719,12 +720,13 @@
             f(x::Matrix{Int}, y::Matrix{Int}) = _f(x, y)
 
             mp = modelproto(f)
-            mt, ss = serdeser(mp)
+            mt = serdeser(mp)
+            ss = sizes(mt)
 
             @test length(ss["data_0"]) == 2
             @test length(ss["data_1"]) == 2
 
-            g = CompGraph(mt, ss)
+            g = CompGraph(mt)
             g([1,2], [3,4]) == f([1,2], [3,4])
         end
 
@@ -733,12 +735,13 @@
             g_org = CompGraph(vis, +(vis...))
 
             mp = modelproto(g_org)
-            mt, ss = serdeser(mp)
+            mt = serdeser(mp)
+            ss = sizes(mt)
 
             @test length(ss["in_0"]) == 2
             @test length(ss["in_1"]) == 2
 
-            g_new = CompGraph(mt, ss)
+            g_new = CompGraph(mt)
             g_org([1,2], [3,4]) == g_new([1,2], [3,4])
         end
     end
@@ -791,7 +794,7 @@
             g_org = CompGraph(v0, v2)
 
             ng = ONNXmutable.name_runningnr()
-            ns(v::MutationVertex) = n -> ng
+            ns(::MutationVertex) = n -> ng
             ns(n) = ng(n)
 
             g_new = tryfile("simple_graph_namestrat.onnx", g_org; namestrat=ns)

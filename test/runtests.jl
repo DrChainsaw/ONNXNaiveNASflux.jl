@@ -1,4 +1,5 @@
 using ONNXmutable
+import ONNXmutable: ONNX
 using Test
 
 @testset "ONNXmutable.jl" begin
@@ -13,8 +14,6 @@ using Test
 
     @info "Test Serialization"
     @testset "Serialize" begin
-        import ONNX
-        include("serialize/protos.jl")
         include("serialize/serialize.jl")
     end
 

@@ -1,5 +1,5 @@
 using Pkg.Artifacts
-import ONNX: get_array, readproto, Proto.TensorProto
+import BaseOnnx: readproto, TensorProto
 import ONNXmutable:  CompGraphBuilder, extract
 
 const last_dl_time = Dict()
@@ -7,18 +7,19 @@ const last_dl_time = Dict()
 function prepare_node_test(name, ninputs, noutputs)
     ahash = get_node_artifact(name, ninputs=ninputs, noutputs=noutputs)
     apath = artifact_path(ahash)
-    model, sizes = extract(joinpath(apath, "model.onnx"))
+    model = extract(joinpath(apath, "model.onnx"))
 
     inputs = readinput.(apath, 0:ninputs-1)
     outputs = readoutput.(apath, 0:noutputs-1)
 
     graph = model.graph
     for (vi, val) in zip(graph.input, inputs)
-        graph.initializer[vi.name] = val
+        val.name = vi.name
+        push!(graph.initializer, val)
     end
 
-    gb = CompGraphBuilder(graph, sizes)
-    return model, sizes, gb, inputs, outputs
+    gb = CompGraphBuilder(graph)
+    return model, gb, Array.(inputs), Array.(outputs)
 end
 
 # Browsable link: https://github.com/onnx/onnx/tree/v1.6.0/onnx/backend/test/data/node
@@ -71,4 +72,4 @@ outputfile(apath, i) = apath * "/test_data_set_0" * "/" * join(["output_", i, ".
 
 readinput(apath, i) = readdata(inputfile(apath, i))
 readoutput(apath, i) = readdata(outputfile(apath, i))
-readdata(filename) = readproto(open(filename), TensorProto()) |> get_array
+readdata(filename) = readproto(open(filename), TensorProto())

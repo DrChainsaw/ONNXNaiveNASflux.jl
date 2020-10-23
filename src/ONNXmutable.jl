@@ -1,7 +1,7 @@
 module ONNXmutable
 
-import ONNX
-import ONNX: readproto, convert, Types, Proto
+import BaseOnnx
+const ONNX = BaseOnnx
 using NaiveNASflux
 import NaiveNASflux: weights, bias
 import NaiveNASflux: indim, outdim, actdim, actrank
@@ -24,7 +24,6 @@ include("deserialize/combine.jl")
 include("deserialize/deserialize.jl")
 
 include("serialize/namingutil.jl")
-include("serialize/protos.jl")
 include("serialize/serialize.jl")
 
 end # module

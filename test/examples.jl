@@ -66,7 +66,7 @@ end
 
 @testset "Custom serialization example" begin
 
-    import ONNXmutable: AbstractProbe, recursename, nextname, newfrom, add!, name
+    import ONNXmutable: AbstractProbe, recursename, nextname, newfrom, add!, name, ONNX
     function myfun(probes::AbstractProbe...)
         p = probes[1] # select any probe
         optype = "MyOpType"
@@ -75,7 +75,7 @@ end
         nodename = recursename(optype, nextname(p))
 
         # Add ONNX node info
-        add!(p, ONNX.Proto.NodeProto(
+        add!(p, ONNX.NodeProto(
         # Names of input is provided by probes. This is why new probes need to be provided as output
         input = collect(name.(probes)),
         # Name of output from this node
