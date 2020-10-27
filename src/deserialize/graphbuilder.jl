@@ -88,4 +88,4 @@ optype(n::OnnxNode) = optype(n.proto)
 
 Flux.params(n::ONNX.NodeProto, initdict) = params(Val(optype(n)), n, initdict)
 Flux.params(::Val, n::ONNX.NodeProto, initdict) = map(pname -> initdict[pname], setdiff(input(n), innames(n))) # Inputs which are not other vertices
-Flux.params(n::OnnxNode) = n.params .|> Array 
+Flux.params(n::OnnxNode) = n.params .|> array 

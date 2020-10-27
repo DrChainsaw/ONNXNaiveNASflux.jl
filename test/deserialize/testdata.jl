@@ -19,7 +19,7 @@ function prepare_node_test(name, ninputs, noutputs)
     end
 
     gb = CompGraphBuilder(graph)
-    return model, gb, Array.(inputs), Array.(outputs)
+    return model, gb, array.(inputs), array.(outputs)
 end
 
 # Browsable link: https://github.com/onnx/onnx/tree/v1.6.0/onnx/backend/test/data/node

@@ -39,7 +39,7 @@ const verts = Dict{Symbol, Any}()
 
 
 sources[:Constant] = params -> constant(Val.(keys(params))..., values(params)...)
-constant(::Val{:value}, val::ONNX.TensorProto) = val |> Array
+constant(::Val{:value}, val::ONNX.TensorProto) = val |> array
 constant(::Val{:value}, val) = val
 
 actfuns[:Relu] = params -> Flux.relu

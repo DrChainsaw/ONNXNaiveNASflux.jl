@@ -1,6 +1,7 @@
 module ONNXmutable
 
 import BaseOnnx
+import BaseOnnx: array
 const ONNX = BaseOnnx
 using NaiveNASflux
 import NaiveNASflux: weights, bias
@@ -11,7 +12,7 @@ import Pkg
 import JuMP: @variable, @constraint
 import NaiveNASflux.NaiveNASlib: compconstraint!, all_in_Δsize_graph
 
-export onnx
+export onnx, CompGraph
 
 include("shapes.jl")
 include("validate.jl")

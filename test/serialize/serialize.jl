@@ -15,7 +15,7 @@
     end
 
     cfun(::ONNX.NodeProto) = np -> OnnxNode(np, TensorProto[])
-    cfun(::ONNX.TensorProto) = Array
+    cfun(::ONNX.TensorProto) = array
     cfun(::ONNX.GraphProto) = identity
 
     include("onnxruntime.jl")

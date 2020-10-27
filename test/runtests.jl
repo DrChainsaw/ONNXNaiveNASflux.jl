@@ -1,5 +1,5 @@
 using ONNXmutable
-import ONNXmutable: ONNX
+import ONNXmutable: ONNX, array
 using Test
 
 @testset "ONNXmutable.jl" begin
