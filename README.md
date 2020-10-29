@@ -26,7 +26,7 @@ graph = CompGraph("model.onnx")
 More elaborate example:
 
 ```julia
-using ONNXmutable, NaiveNASflux, Test
+using ONNXmutable, NaiveNASflux, Statistics, Test
 
 l1 = Conv((3,3), 2=>3, relu)
 l2 = Dense(3, 4, elu)
