@@ -6,7 +6,7 @@ using Conda
 function onnxruntime_infer(f, inputs...)
 	if "onnxruntime" ∉ Conda._installed_packages()
 		pip = joinpath(Conda.SCRIPTDIR, "pip")
-		run(`$pip install onnxruntime --no-warn-script-location`)
+		run(`$pip install onnxruntime==1.4 --no-warn-script-location`)
 	end
 
 	modfile = "tmpmodel.onnx"

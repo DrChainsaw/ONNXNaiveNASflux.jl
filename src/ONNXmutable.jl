@@ -1,7 +1,9 @@
 module ONNXmutable
 
-import ONNX
-import ONNX: readproto, convert, Types, Proto
+include("baseonnx/BaseOnnx.jl")
+
+import .BaseOnnx: array
+const ONNX = BaseOnnx
 using NaiveNASflux
 import NaiveNASflux: weights, bias
 import NaiveNASflux: indim, outdim, actdim, actrank
@@ -11,7 +13,7 @@ import Pkg
 import JuMP: @variable, @constraint
 import NaiveNASflux.NaiveNASlib: compconstraint!, all_in_Δsize_graph
 
-export onnx
+export onnx, CompGraph
 
 include("shapes.jl")
 include("validate.jl")
@@ -24,7 +26,6 @@ include("deserialize/combine.jl")
 include("deserialize/deserialize.jl")
 
 include("serialize/namingutil.jl")
-include("serialize/protos.jl")
 include("serialize/serialize.jl")
 
 end # module

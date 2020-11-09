@@ -1,10 +1,9 @@
 @testset "Validate" begin
     import ONNXmutable: modelproto, graphproto
-    import ONNXmutable: validate, uniqueoutput, optypedefined, outputused, inputused, hasname
-    import ONNX: Proto.NodeProto, Proto.ValueInfoProto
+    import ONNXmutable: validate, uniqueoutput, optypedefined, outputused, inputused, hasname, ONNX.NodeProto
 
-    np(ins,outs,op="A") = NodeProto(input=ins, output=outs, op_type=op)
-    vip(name,shape=(2,:A)) = ValueInfoProto(name, shape)
+    np(ins,outs,op="A") = ONNX.NodeProto(input=ins, output=outs, op_type=op)
+    vip(name,shape=(2,:A)) = ONNX.ValueInfoProto(name, shape)
 
     @testset "Duplicate output name" begin
         gp = graphproto()
@@ -17,18 +16,18 @@
         mp.graph = gp
         @test_throws ErrorException uniqueoutput(mp)
         @test_throws ErrorException validate(mp)
-        @test_logs (:warn, r"Duplicate output name: n1 found in \n NodeProto.*in.*n1.* \n and \n NodeProto.*n2.*n1.*n3") uniqueoutput(mp, s -> @warn s)
+        @test_logs (:warn, r"Duplicate output name: n1 found in NodeProto.*in.*n1.* and NodeProto.*n2.*n1.*n3") uniqueoutput(mp, s -> @warn replace(s, "\n" => ""))
     end
 
     @testset "No OP specified" begin
         gp = graphproto()
 
-        push!(gp.node, NodeProto(output=["n1"], input=["in"]))
+        push!(gp.node, ONNX.NodeProto(output=["n1"], input=["in"]))
         mp = modelproto()
         mp.graph = gp
         @test_throws ErrorException optypedefined(mp)
         @test_throws ErrorException validate(mp)
-        @test_logs (:warn, r"No op_type defined.*in.*n1") optypedefined(mp, s -> @warn s)
+        @test_logs (:warn, r"No op_type defined.*in.*n1") optypedefined(mp, s -> @warn replace(s, "\n" => ""))
     end
 
     @testset "All outputs not used" begin
@@ -64,7 +63,7 @@
     end
 
     @testset "Graph has a name" begin
-        gp = ONNX.Proto.GraphProto(;node=NodeProto[],input=ValueInfoProto[], output=ValueInfoProto[],initializer=ONNX.Proto.TensorProto[],)
+        gp = ONNX.GraphProto(;node=ONNX.NodeProto[],input=ONNX.ValueInfoProto[], output=ONNX.ValueInfoProto[],initializer=ONNX.TensorProto[],)
         mp = modelproto()
         mp.graph = gp
         @test_throws ErrorException hasname(mp)

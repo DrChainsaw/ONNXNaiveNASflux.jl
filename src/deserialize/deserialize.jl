@@ -8,51 +8,41 @@ Return a [`ONNX.Types.Model`](@ref) and a Dict mapping input variables to size t
 Beware that missing/variable size data for a dimension results in a random size for that dimension. Therefore sizes should mostly be used to determine the number of dimensions.
 """
 extract(modelfile::AbstractString) = open(io -> extract(io), modelfile)
-function extract(io::IO)
-   f = readproto(io, ONNX.Proto.ModelProto())
-   return convert(f), sizes(f)
-end
+extract(io::IO) = ONNX.readproto(io, ONNX.ModelProto())
 
-sizes(mp::ONNX.Proto.ModelProto) = sizes(mp.graph)
-sizes(gp::ONNX.Proto.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
+sizes(mp::ONNX.ModelProto) = sizes(mp.graph)
+sizes(gp::ONNX.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
 
-NaiveNASlib.name(vip::ONNX.Proto.ValueInfoProto) = vip.name
-NaiveNASlib.name(tp::ONNX.Proto.TensorProto) = tp.name
-
-Base.size(vip::ONNX.Proto.ValueInfoProto) = size(vip._type)
-Base.size(tp::ONNX.Proto.TypeProto) = size(tp.tensor_type)
-Base.size(tp_t::ONNX.Proto.TypeProto_Tensor) = size(tp_t.shape)
-Base.size(tsp::ONNX.Proto.TensorShapeProto) = size.(Tuple(reverse(tsp.dim)))
-Base.size(tsp_d::ONNX.Proto.TensorShapeProto_Dimension) = isdefined(tsp_d, :dim_value) ? tsp_d.dim_value : missing
+NaiveNASlib.name(n::OnnxNode) = name(n.proto)
+NaiveNASlib.name(n::ONNX.NodeProto) = n.name
+NaiveNASlib.name(vip::ONNX.ValueInfoProto) = vip.name
+NaiveNASlib.name(tp::ONNX.TensorProto) = tp.name
 
 """
    CompGraph(filename::String)
 
 Return a [`CompGraph`](@ref) loaded from the given file.
 """
-NaiveNASlib.CompGraph(filename::String, vfun = create_vertex_default) = open(io -> CompGraph(io), filename)
-NaiveNASlib.CompGraph(io::IO, vfun = create_vertex_default) = CompGraph(extract(io)..., vfun)
-NaiveNASlib.CompGraph(m::ONNX.Types.Model, sizes, vfun = create_vertex_default) = CompGraph(m.graph, sizes, vfun)
+NaiveNASlib.CompGraph(filename::String, vfun = create_vertex_default) = open(io -> CompGraph(io, vfun), filename)
+NaiveNASlib.CompGraph(io::IO, vfun = create_vertex_default) = CompGraph(extract(io), vfun)
+NaiveNASlib.CompGraph(m::ONNX.ModelProto, vfun = create_vertex_default) = CompGraph(m.graph, vfun)
 
-function NaiveNASlib.CompGraph(g::ONNX.Types.Graph, sizes, vfun = create_vertex_default)
-   gb = CompGraphBuilder(g, sizes)
+function NaiveNASlib.CompGraph(g::ONNX.GraphProto, vfun = create_vertex_default)
+   gb = CompGraphBuilder(g)
    outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(g.output), gb), vfun)
    graph = CompGraph(gb.inputs, outputs)
    fix_zerosizes!.(outputs, gb)
    return graph
 end
 
-NaiveNASlib.name(vi::ONNX.Types.ValueInfo) = vi.name
-NaiveNASlib.inputs(n::ONNX.Types.Node) = n.input
-NaiveNASlib.outputs(n::ONNX.Types.Node) = n.output
-optype(n::ONNX.Types.Node) = Symbol(n.op_type)
-
+# This is pretty specific to NaiveNASlib as it has size metadata for all vertices to aid in lazy mutations
+# Sometimes the size values are missing from the protos and then we do this little thing to try to infer it from other sources under the assumption that the imported graph is size-consistent
 fix_zerosizes!(v::AbstractVertex, gb) = fix_zerosizes!(base(v), gb)
-function fix_zerosizes!(v::InputVertex, gb) end
-function fix_zerosizes!(v::CompVertex, gb) end
-function fix_zerosizes!(v::SourceVertex, gb) end
+function fix_zerosizes!(::InputVertex, ::Any) end
+function fix_zerosizes!(::CompVertex, ::Any) end
+function fix_zerosizes!(::SourceVertex, ::Any) end
 function fix_zerosizes!(v::MutationVertex, gb)
-
+    
     if nout(v) == 0
         outs = outputs(v)
         if !isempty(outs)
@@ -97,7 +87,6 @@ end
 findinsize(::FluxParLayer, v, in_index, gb) = nin(layer(v))
 
 
-
 """
    vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
 
@@ -105,11 +94,11 @@ Return an `AbstractVertex` created from `n`.
 
 Inputs to the returned vertex are created recursively based on state in `gb`.
 """
-function vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)
+function vertex(gb::CompGraphBuilder, n::OnnxNode, vfun = create_vertex_default)
       return get!(gb.created, n) do
          n_create, ins = check_combine(gb, n)
          invertices = map(ni -> vertex(gb, ni, vfun), ins)
-         v = vfun(gb, n_create, invertices)
+         v = vfun(n_create, invertices)
          if is_input(v)
             push!(gb.inputs, v)
          end
@@ -123,4 +112,4 @@ is_input(v::CompVertex) = false
 is_input(v::SourceVertex) = false
 
 
-create_vertex_default(gb::CompGraphBuilder, n::ONNX.Types.Node, inputs::Array; kwargs...) = verts[optype(n)](n.name, inputs, n.attribute, params(n, gb)...; kwargs...)
+create_vertex_default(n::OnnxNode, inputs::Array; kwargs...) = verts[optype(n)](name(n), inputs, n.attribute, params(n)...; kwargs...)

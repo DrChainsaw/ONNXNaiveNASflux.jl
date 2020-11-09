@@ -1,28 +1,32 @@
 
 
 """
-    validate(mp::ONNX.Proto.ModelProto)
-    validate(mp::ONNX.Proto.ModelProto, fs...)
+    validate(mp::ONNX.ModelProto)
+    validate(mp::ONNX.ModelProto, fs...)
 
 Validate `mp`, throwing an exception if it is invalid.
 
 It is possible to specify the validation steps `fs` to perform. Default is `uniqueoutput, optypedefined, outputused, inputused, hasname`
 """
-validate(mp::ONNX.Proto.ModelProto, fs...=(uniqueoutput, optypedefined, outputused, inputused, hasname)...) = foreach(f -> f(mp), fs)
+validate(mp::ONNX.ModelProto, fs...=(uniqueoutput, optypedefined, outputused, inputused, hasname)...) = foreach(f -> f(mp), fs)
+
+errinfo(n::ONNX.NodeProto) = "NodeProto with: \n"  * join(["\t$pn:\t$(clstring(getproperty(n, pn)))" for pn in propertynames(n) if hasproperty(n, pn)], "\n")
+clstring(x::AbstractArray) = "[" * join(string.(x), ", ") * "]"
+clstring(x) = string(x)
 
 """
-    uniqueoutput(mp::ONNX.Proto.ModelProto, or=error)
-    uniqueoutput(gp::ONNX.Proto.GraphProto, or=error)
+    uniqueoutput(mp::ONNX.ModelProto, or=error)
+    uniqueoutput(gp::ONNX.GraphProto, or=error)
 
 Test that output names are unique. If not, an error message will be passed to `or`.
 """
-uniqueoutput(mp::ONNX.Proto.ModelProto, or=error) = uniqueoutput(mp.graph, or)
-function uniqueoutput(gp::ONNX.Proto.GraphProto, or=error)
+uniqueoutput(mp::ONNX.ModelProto, or=error) = uniqueoutput(mp.graph, or)
+function uniqueoutput(gp::ONNX.GraphProto, or=error)
     d = Dict()
     for n in gp.node
         for oname in n.output
             if haskey(d, oname)
-                or("Duplicate output name: $oname found in \n $(d[oname]) \n and \n $n")
+                or("Duplicate output name: $oname found in \n$(errinfo(d[oname])) \nand\n $(errinfo(n))")
             end
             d[oname] = n
         end
@@ -30,26 +34,26 @@ function uniqueoutput(gp::ONNX.Proto.GraphProto, or=error)
 end
 
 """
-    optypedefined(mp::ONNX.Proto.ModelProto, or=error)
-    optypedefined(gp::ONNX.Proto.GraphProto, or=error)
+    optypedefined(mp::ONNX.ModelProto, or=error)
+    optypedefined(gp::ONNX.GraphProto, or=error)
 
 Test that operations are defined for each node. If not, an error message will be passed to `or`.
 """
-optypedefined(mp::ONNX.Proto.ModelProto, or=error) = optypedefined(mp.graph, or)
-function optypedefined(gp::ONNX.Proto.GraphProto, or=error)
+optypedefined(mp::ONNX.ModelProto, or=error) = optypedefined(mp.graph, or)
+function optypedefined(gp::ONNX.GraphProto, or=error)
     for n in gp.node
-        isdefined(n, :op_type) || or("No op_type defined for $n")
+        hasproperty(n, :op_type) || or("No op_type defined for $(errinfo(n))")
     end
 end
 
 """
-    outputused(mp::ONNX.Proto.ModelProto, or=error)
-    outputused(gp::ONNX.Proto.GraphProto, or=error)
+    outputused(mp::ONNX.ModelProto, or=error)
+    outputused(gp::ONNX.GraphProto, or=error)
 
 Test that all outputs are used. If not, an error message will be passed to `or`.
 """
-outputused(mp::ONNX.Proto.ModelProto, or=error) = outputused(mp.graph, or)
-function outputused(gp::ONNX.Proto.GraphProto, or=error)
+outputused(mp::ONNX.ModelProto, or=error) = outputused(mp.graph, or)
+function outputused(gp::ONNX.GraphProto, or=error)
     found, used = ioused(gp)
     unusedouts = setdiff(found, used)
     str(s) = join(sort(collect(s)), ", ")
@@ -57,20 +61,20 @@ function outputused(gp::ONNX.Proto.GraphProto, or=error)
 end
 
 """
-    inputused(mp::ONNX.Proto.ModelProto, or=error)
-    inputused(gp::ONNX.Proto.GraphProto, or=error)
+    inputused(mp::ONNX.ModelProto, or=error)
+    inputused(gp::ONNX.GraphProto, or=error)
 
 Test that all inputs are used. If not, an error message will be passed to `or`.
 """
-inputused(mp::ONNX.Proto.ModelProto, or=error) = inputused(mp.graph, or)
-function inputused(gp::ONNX.Proto.GraphProto, or=error)
+inputused(mp::ONNX.ModelProto, or=error) = inputused(mp.graph, or)
+function inputused(gp::ONNX.GraphProto, or=error)
     used, found = ioused(gp)
     unusedins = setdiff(found, used)
     str(s) = join(sort(collect(s)), ", ")
     isempty(unusedins) || or("Found unused inputs: $(str(unusedins))")
 end
 
-function ioused(gp::ONNX.Proto.GraphProto)
+function ioused(gp::ONNX.GraphProto)
     found = union(Set(name.(gp.input)), Set(name.(gp.initializer)))
     used = Set(name.(gp.output))
     for n in gp.node
@@ -81,8 +85,8 @@ function ioused(gp::ONNX.Proto.GraphProto)
     return found, used
 end
 
-hasname(mp::ONNX.Proto.ModelProto, or=error) = hasname(mp.graph, or)
-function hasname(gp::ONNX.Proto.GraphProto, or=error)
-     isdefined(gp, :name) || return or("Graph name not defined!")
+hasname(mp::ONNX.ModelProto, or=error) = hasname(mp.graph, or)
+function hasname(gp::ONNX.GraphProto, or=error)
+     hasproperty(gp, :name) || return or("Graph name not defined!")
      isempty(gp.name) && or("Graph name is empty string!")
  end
