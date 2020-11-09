@@ -1,7 +1,8 @@
 module ONNXmutable
 
-import BaseOnnx
-import BaseOnnx: array
+include("baseonnx/BaseOnnx.jl")
+
+import .BaseOnnx: array
 const ONNX = BaseOnnx
 using NaiveNASflux
 import NaiveNASflux: weights, bias

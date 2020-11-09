@@ -10,6 +10,10 @@ It is possible to specify the validation steps `fs` to perform. Default is `uniq
 """
 validate(mp::ONNX.ModelProto, fs...=(uniqueoutput, optypedefined, outputused, inputused, hasname)...) = foreach(f -> f(mp), fs)
 
+errinfo(n::ONNX.NodeProto) = "NodeProto with: \n"  * join(["\t$pn:\t$(clstring(getproperty(n, pn)))" for pn in propertynames(n) if hasproperty(n, pn)], "\n")
+clstring(x::AbstractArray) = "[" * join(string.(x), ", ") * "]"
+clstring(x) = string(x)
+
 """
     uniqueoutput(mp::ONNX.ModelProto, or=error)
     uniqueoutput(gp::ONNX.GraphProto, or=error)
@@ -22,7 +26,7 @@ function uniqueoutput(gp::ONNX.GraphProto, or=error)
     for n in gp.node
         for oname in n.output
             if haskey(d, oname)
-                or("Duplicate output name: $oname found in \n $(d[oname]) \n and \n $n")
+                or("Duplicate output name: $oname found in \n$(errinfo(d[oname])) \nand\n $(errinfo(n))")
             end
             d[oname] = n
         end
@@ -38,7 +42,7 @@ Test that operations are defined for each node. If not, an error message will be
 optypedefined(mp::ONNX.ModelProto, or=error) = optypedefined(mp.graph, or)
 function optypedefined(gp::ONNX.GraphProto, or=error)
     for n in gp.node
-        isdefined(n, :op_type) || or("No op_type defined for $n")
+        hasproperty(n, :op_type) || or("No op_type defined for $(errinfo(n))")
     end
 end
 
@@ -83,6 +87,6 @@ end
 
 hasname(mp::ONNX.ModelProto, or=error) = hasname(mp.graph, or)
 function hasname(gp::ONNX.GraphProto, or=error)
-     isdefined(gp, :name) || return or("Graph name not defined!")
+     hasproperty(gp, :name) || return or("Graph name not defined!")
      isempty(gp.name) && or("Graph name is empty string!")
  end

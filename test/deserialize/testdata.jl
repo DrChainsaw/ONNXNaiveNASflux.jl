@@ -1,5 +1,5 @@
 using Pkg.Artifacts
-import BaseOnnx: readproto, TensorProto
+import ONNXmutable.BaseOnnx: readproto, TensorProto
 import ONNXmutable:  CompGraphBuilder, extract
 
 const last_dl_time = Dict()

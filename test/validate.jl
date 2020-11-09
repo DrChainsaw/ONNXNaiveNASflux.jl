@@ -16,7 +16,7 @@
         mp.graph = gp
         @test_throws ErrorException uniqueoutput(mp)
         @test_throws ErrorException validate(mp)
-        @test_logs (:warn, r"Duplicate output name: n1 found in \n NodeProto.*in.*n1.* \n and \n NodeProto.*n2.*n1.*n3") uniqueoutput(mp, s -> @warn s)
+        @test_logs (:warn, r"Duplicate output name: n1 found in NodeProto.*in.*n1.* and NodeProto.*n2.*n1.*n3") uniqueoutput(mp, s -> @warn replace(s, "\n" => ""))
     end
 
     @testset "No OP specified" begin
@@ -27,7 +27,7 @@
         mp.graph = gp
         @test_throws ErrorException optypedefined(mp)
         @test_throws ErrorException validate(mp)
-        @test_logs (:warn, r"No op_type defined.*in.*n1") optypedefined(mp, s -> @warn s)
+        @test_logs (:warn, r"No op_type defined.*in.*n1") optypedefined(mp, s -> @warn replace(s, "\n" => ""))
     end
 
     @testset "All outputs not used" begin

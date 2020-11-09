@@ -1,8 +1,13 @@
 using ONNXmutable
-import ONNXmutable: ONNX, array
+import ONNXmutable: ONNX
 using Test
 
 @testset "ONNXmutable.jl" begin
+
+    @info "Test BaseOnnx"
+    @testset "BaseOnnx" begin  
+        include("baseonnx/readwrite.jl")
+    end
 
     @info "Test Deserialization"
     @testset "Deserialize" begin
