@@ -4,9 +4,11 @@
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/DrChainsaw/ONNXmutable.jl?svg=true)](https://ci.appveyor.com/project/DrChainsaw/ONNXmutable-jl)
 [![Codecov](https://codecov.io/gh/DrChainsaw/ONNXmutable.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/DrChainsaw/ONNXmutable.jl)
 
-ONNXmutable is an extension of [ONNX.jl](https://github.com/FluxML/ONNX.jl) which adds serialization of (almost) arbitrary functions into [ONNX](https://onnx.ai) models.
+[ONNX](https://onnx.ai) import and export for [Flux](https://github.com/FluxML/Flux.jl).
 
-It is also capable of deserializing models into [NaiveNASflux](https://github.com/DrChainsaw/NaiveNASflux.jl) graphs, bringing its powerful mutation capabilities to the transfer learning context.
+Models are imported as [NaiveNASflux](https://github.com/DrChainsaw/NaiveNASflux.jl) graphs, meaning that things like removing/inserting layers and pruning pre-trained models is a breeze.
+
+Model export does not require the model to have any particular format. Almost any julia function can be exported as long as the primitives are recognized by ONNXmutable. 
 
 ## Basic usage
 
@@ -14,19 +16,28 @@ It is also capable of deserializing models into [NaiveNASflux](https://github.co
 Pkg.add("https://github.com/DrChainsaw/ONNXmutable.jl")
 ```
 
-Serialization is done using the `onnx` function which accepts a filename `String` or an `IO` as first argument:
+Exporting is done using the `onnx` function which accepts a filename `String` or an `IO` as first argument:
 
 ```julia
-# Save model as model.onnx where inputshapes are tuples with sizes of input
+# Save model as model.onnx where inputshapes are tuples with sizes of input.
 onnx("model.onnx", model, inputshapes...)
 
 # Load model as a CompGraph
 graph = CompGraph("model.onnx")
 ```
-More elaborate example:
+Input shapes can be omitted in which case no size information is recorded. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
+
+Elements of input shape tuples can have one of the following types:
+* `Integer`: The size of the corresponding dimension
+* `Missing`: No shape info will be recorded for this dimension
+* `Symbol` : Use the provided symbol as a variable name in the exported ONNX model
+
+The example below shows some of these options in action.
+
+More elaborate example with a model defined as a plain Julia function:
 
 ```julia
-using ONNXmutable, NaiveNASflux, Test
+using ONNXmutable, NaiveNASflux, Test, Statistics
 
 l1 = Conv((3,3), 2=>3, relu)
 l2 = Dense(3, 4, elu)
@@ -45,7 +56,7 @@ x_shape = (:W, :H, 2, :Batch)
 y_shape = (4, :Batch)
 onnx(io, f, x_shape, y_shape)
 
-# Deserialize as a NaiveNASflux CompGraph (or use the deserialization method from ONNX.jl)
+# Deserialize as a NaiveNASflux CompGraph
 g = CompGraph(io)
 
 x = ones(Float32, 5,4,2,3)
@@ -124,7 +135,7 @@ end
 See [serialize.jl](src/serialize/serialize.jl) for existing operations.
 
 
-Deserialization is done by simply mapping operation types to functions in a dictionary in a very similar manner as it is done in [ONNX.jl](https://github.com/FluxML/ONNX.jl). This allows for both easy extension as well as overwriting of existing mappings with own implementations:
+Deserialization is done by simply mapping operation types to functions in a dictionary. This allows for both easy extension as well as overwriting of existing mappings with own implementations:
 
 ```julia
 import ONNXmutable: actfuns
