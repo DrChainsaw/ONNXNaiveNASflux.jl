@@ -96,7 +96,7 @@ Idea is that probe will "record" all seen operations based on how methods for th
 abstract type AbstractProbe end
 
 # Called by several activation functions
-Base.oftype(p::AbstractProbe, x) = x
+Base.oftype(::AbstractProbe, x) = x
 
 """
     ProtoProbe <: AbstractProbe
@@ -137,7 +137,7 @@ Return a new `ProtoProbe` with name `outname`. Argument `fshape` is used to dete
 newfrom(p::ProtoProbe, outname::AbstractString, fshape) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
 
 nextshape(p::AbstractProbe, f::Function) = nextshape(shape(p), f)
-nextshape(::Missing, f::Function) = missing
+nextshape(::Missing, f::Function) = missing # We want missing to propagate, even if possible to infer output shape? Not necessary for anything though so it should be possible to change if needed.
 nextshape(s::Tuple, f::Function) = f(s)
 
 add!(gp::ONNX.GraphProto, np::ONNX.NodeProto) = push!(gp.node, np)
@@ -262,7 +262,7 @@ end
 (l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
 
 attribs(l) = attribs(layertype(l), l)
-attribs(lt::FluxConvolutional{N}, l) where N = ONNX.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
+attribs(::FluxConvolutional{N}, l) where N = ONNX.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
 attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.AttributeProto.(["kernel_shape", "pads", "strides"],  [reverse(l.k), padexpand(Val(N), l.pad), reverse(l.stride)])
 
 # Interleave padding! (1,2) => [2,1,2,1], (1,1,2,2,3,3) => (3,2,1,3,2,1)
@@ -300,8 +300,8 @@ actfun(::FluxBatchNorm, l) = l.λ
 
 NaiveNASflux.layertype(::Flux.RNNCell) = FluxRnn()
 NaiveNASflux.layertype(::Flux.LSTMCell) = FluxLstm()
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wh
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wh
+NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wi
+NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wi
 
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
@@ -336,8 +336,7 @@ function recurrent_node(l, pp, optype)
         attribute = push!(activation_attrib(l), hsattrib),
         op_type=optype))
 
-    # ONNX wants num directions as an extra dimension to output
-    return newfrom(pp, lname, s -> (nout(l), s[2], 1, s[end]))
+    return newfrom(pp, lname, s -> outshape(l, s))
 end
 
 
@@ -357,7 +356,7 @@ function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Att
     name=lname,
     attribute = attributes,
     op_type= optype))
-    return newfrom(pps[1], lname, identity)
+    return newfrom(pps[1], lname, fhshape)
 end
 
 Flux.relu(pp::AbstractProbe) = attribfun(identity, "Relu", pp)
