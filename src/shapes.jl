@@ -57,13 +57,15 @@ function unflipweights(::FluxLstm, w, hsize)
 end
 
 outshape(l, s) = outshape(layertype(l), l, s)
+outshape(::FluxParLayer, l, ::Missing) = outshape(l, shape(layertype(l), nin(l))) 
+outshape(lt, l, ::Missing) = missing
 
-function outshape(::FluxDense, l, s) 
+function outshape(::FluxDense, l, s::Tuple) 
     assertshape(s, 2, l)
     assertsize(s[1], nin(l), l)
     return (nout(l), s[end])
 end
-function outshape(::FluxRecurrent, l, s)
+function outshape(::FluxRecurrent, l, s::Tuple)
     assertshape(s, (3, 4), l)
     assertsize(s[1], nin(l), l)
     # ONNX wants num directions as an extra dimension to output
@@ -71,7 +73,7 @@ function outshape(::FluxRecurrent, l, s)
     return (nout(l), s[2], 1, s[end])
 end
 
-function outshape(::FluxConvolutional{N}, l, s) where N
+function outshape(::FluxConvolutional{N}, l, s::Tuple) where N
     assertshape(s, N+2, l)
     assertsize(s[N+1], nin(l), l)
     p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
@@ -86,7 +88,8 @@ function outshape(::FluxConvolutional{N}, l, s) where N
     return (o..., nout(l), s[N+2])
 end
 
-function outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s) where N
+outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, ::Missing) where N = outshape(l, ntuple(i->missing, N+2))
+function outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s::Tuple) where N
     assertshape(s, N+2, l)
     p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
     k = l.k

@@ -814,7 +814,9 @@
 
         @testset "Allowed input shapes op: $(tc[1])" for tc in (
             (Dense(2, 3), ((2, 3), (2, missing), missing, (missing, missing)), (2, 2)),
+            (Conv((1,), 2=>3), ((1,2,1), (1, missing, missing), missing, ntuple(i -> missing, 3)), (1,2,1)),
             (Conv((1,1), 2=>3), ((1,1,2,1), (1, missing, missing, missing), missing, ntuple(i -> missing, 4)), (1,1,2,1)),
+            (RNN(2,3), ((2,3,1), missing, ntuple(i -> missing, 3), ntuple(i -> missing ,4)), (2, 3))
         )     
             op, testsizes, validsize = tc
             inpt = ones(Float32, validsize)
@@ -823,6 +825,7 @@
             @test g1(inpt) == op(inpt)
             @testset "Inputshape $s" for s in testsizes
                 g = remodel(op, s)
+                Flux.reset!(op) # For RNNs or else the test below will fail
                 @test g(inpt) == op(inpt)
             end
         end
@@ -833,7 +836,9 @@
             g1 = remodel(op; assertwarn=false)
             @test g1(in1, in2) == in1 .+ in2
             @testset "Inputshape $s1, $s2" for (s1, s2) in (
-                ((2,), (2,)),
+                ((3,), (3,)),
+                ((missing,), (missing,)),
+                (missing, missing),
                 )
                 g = remodel(op, s1, s2; assertwarn=false)
                 @test g(in1, in2) == in1 .+ in2

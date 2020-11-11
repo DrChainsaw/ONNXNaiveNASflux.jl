@@ -25,7 +25,7 @@ onnx("model.onnx", model, inputshapes...)
 # Load model as a CompGraph
 graph = CompGraph("model.onnx")
 ```
-Input shapes can be omitted in which case no size information is recorded. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
+Input shapes can be omitted in which case an attempt to infer the shapes will be made. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
 
 Elements of input shape tuples can have one of the following types:
 * `Integer`: The size of the corresponding dimension

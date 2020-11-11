@@ -135,10 +135,7 @@ newnamestrat(p::ProtoProbe, f, pname=p.name) = ProtoProbe(pname, p.shape, f, p.g
 Return a new `ProtoProbe` with name `outname`. Argument `fshape` is used to determine a new shape (typically a function).
 """
 newfrom(p::ProtoProbe, outname::AbstractString, fshape) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
-
-nextshape(p::AbstractProbe, f::Function) = nextshape(shape(p), f)
-nextshape(::Missing, f::Function) = missing # We want missing to propagate, even if possible to infer output shape? Not necessary for anything though so it should be possible to change if needed.
-nextshape(s::Tuple, f::Function) = f(s)
+nextshape(p::AbstractProbe, f::Function) = f(shape(p))
 
 add!(gp::ONNX.GraphProto, np::ONNX.NodeProto) = push!(gp.node, np)
 
@@ -375,7 +372,7 @@ globalmeanpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalAveragePoo
 globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
 
 function globalpool(pp::AbstractProbe, wrap, type)
-     gpp = attribfun(s -> (1, 1, s[3:end]...), type, pp)
+     gpp = attribfun(s -> ismissing(s) ? s : (1, 1, s[3:end]...), type, pp)
      ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
      wpp = wrap(ppnext)
      return newnamestrat(wpp, nextname(gpp))
