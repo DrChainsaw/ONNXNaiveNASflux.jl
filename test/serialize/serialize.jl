@@ -702,6 +702,54 @@
 
             test_named_graph(CompGraph(v0, v3), (2,3))
         end
+
+        @testset "Infer shapes" begin
+
+            function remodel(g, args...=missing)
+                pb = PipeBuffer()
+                onnx(pb, g, args...)
+                @test_logs (:warn, r"Mismatched") match_mode=:any CompGraph(pb)
+            end
+            
+            @testset "Batchnorm -> Conv graph" begin
+                v0 = inputvertex("input", 3, FluxConv{2}())    
+                v1 = bnvertex("v1", v0)
+                v2 = convvertex("v2", v1, 2)
+
+                g = remodel(CompGraph(v0, v2))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+
+            @testset "Two conv graph" begin
+                v0 = inputvertex("input", 3, FluxConv{2}())    
+                v1a = convvertex("v1a", v0, 4)
+                v1b = convvertex("v1b", v0, 2)
+                v2 = concat("v2", v1a, v1b)
+
+                g_org = g = remodel(CompGraph(v0, v2))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+
+            @testset "Concat path" begin
+                v0 = inputvertex("input", 3, FluxDense())
+                v1 = dense("v1", v0, 4, elu)
+                v2 = concat(v1, v0)    
+
+                g = remodel(CompGraph(v0, v2))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+
+            @testset "Shortcut to globpool -> dense" begin
+                v0 = inputvertex("input", 3, FluxConv{2}())    
+                v1 = convvertex("v1", v0, 2)
+                v2 = concat("v2", v1, v0)
+                v3 = fvertex("v3", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+                v4 = dense("v4", v3, 4)
+
+                g = remodel(CompGraph(v0, v4))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+        end
     end
 
     @testset "Models" begin
@@ -805,7 +853,6 @@
         function remodel(m, args...; assertwarn=true)
             pb = PipeBuffer()
             onnx(pb, m, args...)
-            # TODO: It seems like this warning might be possible to avoid 
             if assertwarn && (isempty(args) || any(ismissing, args))
                 return @test_logs (:warn, r"Mismatched") CompGraph(pb)
             end

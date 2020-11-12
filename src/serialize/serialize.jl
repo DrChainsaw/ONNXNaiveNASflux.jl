@@ -456,7 +456,9 @@ function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
     attrib = if isempty(dims)
         ONNX.AttributeProto[]
     else
-        np_axis = flux2numpydim.(dims, ndims(pps[1]))
+        pok = filter(p -> !ismissing(shape(p)), pps)
+        @assert !isempty(pok) "Must have at least one shape to determine axis!"
+        np_axis = flux2numpydim.(dims, ndims(pok[1]))
         [ONNX.AttributeProto(axname, np_axis)]
     end
 

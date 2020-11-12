@@ -68,20 +68,33 @@ node(nodename::String, gb::CompGraphBuilder, parent=nothing) = get!(gb.allnodes,
    return OnnxNode(inputnode, ONNX.TensorProto[], Dict{Symbol, Any}(:size=>inshape, :ltype=>ltype))
 end
 
-find_valid_fluxlayertype(::Nothing, gb, direction=outnames) = []
-function find_valid_fluxlayertype(n::OnnxNode, gb, direction=outnames)
+find_valid_fluxlayertype(::Nothing, gb, seen=[]) = []
+function find_valid_fluxlayertype(n::OnnxNode, gb, seen=[])
+   n in seen && return []
+   push!(seen, n)
+
    lt = fluxlayertypes[optype(n)](n.params...)
    lt isa FluxParLayer && return [lt]
-   return mapreduce(vcat, direction(n, gb); init=[]) do outname
+   stop_search(optype(n)) && return []
+
+   return mapreduce(vcat, vcat(outnames(n, gb), innames(n)); init=[]) do outname
       outnode = get(gb.allnodes, outname, nothing)
-      find_valid_fluxlayertype(outnode, gb, direction)
+      find_valid_fluxlayertype(outnode, gb, seen)
    end
 end
 
+stop_search(lt) = false
+stop_search(ot::Symbol) = stop_search(Val{ot})
+stop_search(::Type{Val{:Reshape}}) = true
+stop_search(::Type{Val{:Flatten}}) = true
+stop_search(::Type{Val{:Squeeze}}) = true
+stop_search(::Type{Val{:ReshapeMean}}) = true
+
+
 function select_layertype(inname, inshape, lts::Tuple)
    ltsvalid = filter(lts) do lt
-      length(inshape) == length(shape(lt, 0))
-   end
+      length(inshape) == 0 || length(inshape) == length(shape(lt, 0))
+   end |> unique
 
    length(ltsvalid) == 1 && return ltsvalid[1]
    length(ltsvalid) == 0 && return guess_layertype(length(inshape))
@@ -101,11 +114,9 @@ innames(::Val{:Concat}, n::ONNX.NodeProto) = input(n)
 input(n::ONNX.NodeProto) = n.input
 input(n::OnnxNode) = input(n.proto)
 
-outnames(n::OnnxNode, gb) = outnodes(n.proto, gb)
-function outnames(n::ONNX.NodeProto, gb::CompGraphBuilder)
-   allins = vcat(innames.(nodes(gb))...)
-   return filter(oname -> oname in allins, output(n))
-end
+outnames(n::OnnxNode, gb) = outnames(n.proto, gb)
+outnames(n::ONNX.NodeProto, gb::CompGraphBuilder) = name.(outnodes(n, gb))
+
 output(n::ONNX.NodeProto) = n.output
 output(n::OnnxNode) = output(n.proto)
 
@@ -113,8 +124,9 @@ innodes(n::OnnxNode, gb::CompGraphBuilder) = innodes(n.proto, gb)
 innodes(n::ONNX.NodeProto, gb::CompGraphBuilder) = map(ni -> node(ni, gb, n), innames(n))
 outnodes(n::OnnxNode, gb::CompGraphBuilder) = outnodes(n.proto, gb)
 function outnodes(n::ONNX.NodeProto, gb::CompGraphBuilder)
-    onames = outnames(n, gb)
-    filter(nn -> any(on -> on in nn.input, onames), gb.g.node)
+   allins = mapreduce(innames, vcat, nodes(gb))
+   onames = filter(oname -> oname in allins, output(n))
+   filter(nn -> any(on -> on in nn.input, onames), gb.g.node)
 end
 
 optype(n::ONNX.NodeProto) = Symbol(n.op_type)
