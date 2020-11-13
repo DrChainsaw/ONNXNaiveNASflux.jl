@@ -526,7 +526,7 @@
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
             NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
-            g_new = CompGraph(gt_new, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
+            g_new = CompGraph(gt_new; vfun = (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
@@ -568,7 +568,7 @@
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
             NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
-            g_new = CompGraph(gt_new, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
+            g_new = CompGraph(gt_new; vfun = (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))

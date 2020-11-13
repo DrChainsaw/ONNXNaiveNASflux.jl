@@ -170,7 +170,7 @@ Argument `outshape` is a function which returns the shape of an `AbstractVertex`
 
 Argument `namestrat` determines how nodes shall be named.
 """
-graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(g.inputs, namestrat) .=> shape.(g.inputs))...;namestrat=namestrat)
+graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(g.inputs, namestrat) .=> outshape.(g.inputs))...;namestrat=namestrat)
 
 """
     graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())

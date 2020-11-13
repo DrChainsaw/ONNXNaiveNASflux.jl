@@ -24,14 +24,30 @@ struct CompGraphBuilder
    inputs::Vector{AbstractVertex}
 end
 
-function CompGraphBuilder(g::ONNX.GraphProto) 
-   initdict = Dict(tp.name => tp for tp in g.initializer)
-   CompGraphBuilder(g, sizes(g), output_to_node(g.node, initdict), IdDict{OnnxNode, AbstractVertex}(), AbstractVertex[])
+CompGraphBuilder(g::ONNX.GraphProto) = CompGraphBuilder(g, Dict()) # To avoid ambigity
+function CompGraphBuilder(g::ONNX.GraphProto, insizes::Tuple...) 
+   @assert length(insizes) <= length(g.input) "Too many inputs supplied! Got $(length(insizes)) while model inputs are $(name.(g.input))"
+   CompGraphBuilder(g, map(=>, name.(g.input), insizes)...)
+end
+function CompGraphBuilder(g::ONNX.GraphProto, insizes::Pair{String, <:Tuple}...)
+   @assert length(insizes) <= length(g.input) "Too many inputs supplied! Got $(length(insizes)) while model inputs are $(name.(g.input))"
+   @assert all(n -> n in name.(g.input), first.(insizes)) "Input names does not match! Got $(first.(insizes)) to model with input names $(name.(g.input))"
+   CompGraphBuilder(g, merge(sizes(g), Dict(insizes...)))
+end
+   
+function CompGraphBuilder(g::ONNX.GraphProto, inoutsizes::AbstractDict)
+    allsizes = merge(sizes(g), inoutsizes) |> clean_size
+    initdict = Dict(tp.name => tp for tp in g.initializer)
+    CompGraphBuilder(g, allsizes, output_to_node(g.node, initdict), IdDict{OnnxNode, AbstractVertex}(), AbstractVertex[])
 end
 
 sizes(mp::ONNX.ModelProto) = sizes(mp.graph)
 sizes(gp::ONNX.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
 
+clean_size(d::AbstractDict) = Dict(k => clean_size(v) for (k,v) in pairs(d))
+clean_size(t::Tuple) = clean_size.(t)
+clean_size(i::Integer) = i
+clean_size(::Any) = 0
 
 function output_to_node(nodes, initdict)
    allnodes = Dict{String, OnnxNode}()

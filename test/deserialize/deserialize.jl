@@ -264,3 +264,45 @@ end
         @test res ≈ outputs[1]
     end
 end
+
+@testset "Deserialize with inputs" begin
+
+    function sumgraph()
+        ivs = inputvertex.(["in1", "in2"], 4, Ref(FluxDense())) 
+        g_org = CompGraph(ivs, "out" >> ivs[1] + ivs[2])
+        pb = PipeBuffer()
+        onnx(pb, g_org, "in1" => missing, "in2" => missing)
+        return pb
+    end
+
+    insize(t::Tuple) = ONNXmutable.clean_size(t[NaiveNASflux.actdim(length(t))])
+    insize(p::Pair) = p |> last |> insize
+    @testset "Input format $inshapes" for inshapes in (
+        ((4,1), (4,1)),
+        ("in1" => (4,1), "in2" => (4,1)),
+        ((4,missing), (4, :B)),
+        ((:I, 3), (:I, 4))
+    ) 
+        g_new = CompGraph(sumgraph(), inshapes...)
+        @test nout.(g_new.inputs) == insize.(inshapes) |> collect
+        @test layertype.(g_new.inputs) == [FluxDense(), FluxDense()]
+    end
+
+    inshape(t::Tuple) = t |> length |> ONNXmutable.guess_layertype
+    @testset "Mixshape format $inshapes" for inshapes in (
+        ((1,1,5,1), (5,1)),
+        ((5,1), (1,1,5,1)),
+    )
+        g_new = CompGraph(sumgraph(), inshapes...)
+        @test nout.(g_new.inputs) == [5, 5]
+        @test layertype.(g_new.inputs) == inshape.(inshapes |> collect)
+    end
+
+    @testset "Malformed input $inshapes" for inshapes in (
+        ((4,1), (4,1), (4,1)),
+        ("in1" => (4,1), "in2" => (4,1), "in2" => (4,1)),
+        ("in1" => (4,1), "notin2" => (4,1))
+    )
+        @test_throws AssertionError CompGraph(sumgraph(), inshapes...)
+    end
+end
