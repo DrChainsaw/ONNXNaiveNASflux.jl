@@ -14,7 +14,7 @@
         return ONNXmutable.extract(iob)
     end
 
-    cfun(::ONNX.NodeProto) = np -> OnnxNode(np, TensorProto[])
+    cfun(::ONNX.NodeProto) = np -> OnnxNode(np, ONNX.TensorProto[])
     cfun(::ONNX.TensorProto) = array
     cfun(::ONNX.GraphProto) = identity
 
@@ -25,18 +25,20 @@
         import ONNXmutable: optype, actfuns, fluxlayers, invariantops
         using NaiveNASflux
         import NaiveNASflux: weights, bias
-        import ONNXmutable: AbstractProbe, nextname, newfrom, add!, genname
-        struct NodeProbe{F} <: AbstractProbe
+        import ONNXmutable: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape
+        struct NodeProbe{F, S} <: AbstractProbe
             name::String
             namefun::F
+            shape::S
             protos::Vector{Any}
         end
-        NodeProbe(name, namefun) = NodeProbe(name, namefun, [])
+        NodeProbe(name, namefun, shape=missing) = NodeProbe(name, namefun, shape, [])
         ONNXmutable.add!(p::NodeProbe, n) = push!(p.protos, n)
         ONNXmutable.nextname(p::NodeProbe) = p.namefun
-        ONNXmutable.newfrom(p::NodeProbe, pname, Δshape=nothing) = NodeProbe(pname, p.namefun, p.protos)
-        ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.protos)
+        ONNXmutable.newfrom(p::NodeProbe, pname, Δshape=identity) = NodeProbe(pname, p.namefun, nextshape(p, Δshape), p.protos)
+        ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.shape, p.protos)
         ONNXmutable.name(p::NodeProbe) = p.name
+        ONNXmutable.shape(p::NodeProbe) = p.shape
 
         @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
             (op=:Relu, attr = Dict(), fd=actfuns),
@@ -78,8 +80,7 @@
             (f=mean, dims=(2, 3), ndims=4, ot=:ReduceMean, axname=:axes),
             (f=dropdims, dims=(3,), ndims=3, ot=:Squeeze, axname=:axes)
             )
-            inprobe = NodeProbe("input", f -> "output")
-            ONNXmutable.shape(p::NodeProbe) = Tuple(1:tc.ndims)
+            inprobe = NodeProbe("input", f -> "output", Tuple(1:tc.ndims))
 
             outprobe = tc.f(inprobe, dims=tc.dims)
 
@@ -96,15 +97,10 @@
         end
 
         @testset "Reshape" begin
-            inprobe = NodeProbe("input", f -> "output")
-
-            shapeout = 1
-            function ONNXmutable.newfrom(p::NodeProbe, pname, Δshape::Function)
-                shapeout = Δshape((:A, missing, 12))
-                return NodeProbe(pname, p.namefun, p.protos)
-             end
+            inprobe = NodeProbe("input", f -> "output", (:A, missing, 12))
 
             outprobe = reshape(inprobe, (0, 3, 2, Colon()))
+            shapeout = shape(outprobe)
 
             @test length(outprobe.protos) == 2
 
@@ -137,9 +133,8 @@
             (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 5),
             (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
             )
-            ONNXmutable.shape(p::NodeProbe) = missing
 
-            inprobe = NodeProbe("input", genname)
+            inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
             outprobe = tc.layer(inprobe)
 
@@ -178,9 +173,8 @@
             (layer=Dense(randn(Float32, 2,3), Flux.Zeros()), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
             (layer=Conv((1,1), 2=>3; bias=Flux.Zeros(3)), indata=reshape(collect(Float32, 1:2*3), 1,1,2,3) .- 3),
             )
-            ONNXmutable.shape(p::NodeProbe) = missing
 
-            inprobe = NodeProbe("input", genname)
+            inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
             outprobe = tc.layer(inprobe)
 
@@ -213,8 +207,7 @@
             )
             import NaiveNASflux: hiddenweights
 
-            ONNXmutable.shape(p::NodeProbe) = (missing, nout(tc.layer), missing)
-            inprobe = NodeProbe("input", genname)
+            inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
             outprobe = tc.layer(inprobe)
 
@@ -533,7 +526,7 @@
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
             NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
-            g_new = CompGraph(gt_new, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
+            g_new = CompGraph(gt_new; vfun = (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
@@ -575,7 +568,7 @@
             NaiveNASflux.layer(c::CntSpy) = layer(c.f)
             NaiveNASflux.layertype(c::CntSpy) = layertype(c.f)
 
-            g_new = CompGraph(gt_new, (args...) -> create_vertex_default(args...;layerfun=CntSpy))
+            g_new = CompGraph(gt_new; vfun = (args...) -> create_vertex_default(args...;layerfun=CntSpy))
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
@@ -709,6 +702,54 @@
 
             test_named_graph(CompGraph(v0, v3), (2,3))
         end
+
+        @testset "Infer shapes" begin
+
+            function remodel(g, args...=missing)
+                pb = PipeBuffer()
+                onnx(pb, g, args...)
+                @test_logs (:warn, r"Mismatched") match_mode=:any CompGraph(pb)
+            end
+            
+            @testset "Batchnorm -> Conv graph" begin
+                v0 = inputvertex("input", 3, FluxConv{2}())    
+                v1 = bnvertex("v1", v0)
+                v2 = convvertex("v2", v1, 2)
+
+                g = remodel(CompGraph(v0, v2))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+
+            @testset "Two conv graph" begin
+                v0 = inputvertex("input", 3, FluxConv{2}())    
+                v1a = convvertex("v1a", v0, 4)
+                v1b = convvertex("v1b", v0, 2)
+                v2 = concat("v2", v1a, v1b)
+
+                g_org = g = remodel(CompGraph(v0, v2))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+
+            @testset "Concat path" begin
+                v0 = inputvertex("input", 3, FluxDense())
+                v1 = dense("v1", v0, 4, elu)
+                v2 = concat(v1, v0)    
+
+                g = remodel(CompGraph(v0, v2))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+
+            @testset "Shortcut to globpool -> dense" begin
+                v0 = inputvertex("input", 3, FluxConv{2}())    
+                v1 = convvertex("v1", v0, 2)
+                v2 = concat("v2", v1, v0)
+                v3 = fvertex("v3", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+                v4 = dense("v4", v3, 4)
+
+                g = remodel(CompGraph(v0, v4))
+                @test layertype(g.inputs[1]) == layertype(v0)
+            end
+        end
     end
 
     @testset "Models" begin
@@ -805,6 +846,63 @@
 
             indata = reshape(collect(Float32, 1:1*2*3*4), 1,2,3,4)
             @test g_org(indata) ≈ g_new(indata)
+        end
+    end
+
+    @testset "Allowed input shapes" begin
+        function remodel(m, args...; assertwarn=true)
+            pb = PipeBuffer()
+            onnx(pb, m, args...)
+            if assertwarn && (isempty(args) || any(ismissing, args))
+                return @test_logs (:warn, r"Mismatched") CompGraph(pb)
+            end
+            return CompGraph(pb)
+        end
+
+        @testset "Allowed input shapes op: $(tc[1])" for tc in (
+            (Dense(2, 3), ((2, 3), (2, missing), missing, (missing, missing)), (2, 2)),
+            (Conv((1,), 2=>3), ((1,2,1), (1, missing, missing), missing, ntuple(i -> missing, 3)), (1,2,1)),
+            (Conv((1,1), 2=>3), ((1,1,2,1), (1, missing, missing, missing), missing, ntuple(i -> missing, 4)), (1,1,2,1)),
+            (RNN(2,3), ((2,3,1), missing, ntuple(i -> missing, 3), ntuple(i -> missing ,4)), (2, 3))
+        )     
+            op, testsizes, validsize = tc
+            inpt = ones(Float32, validsize)
+
+            g1 = remodel(op)
+            @test g1(inpt) == op(inpt)
+            @testset "Inputshape $s" for s in testsizes
+                g = remodel(op, s)
+                Flux.reset!(op) # For RNNs or else the test below will fail
+                @test g(inpt) == op(inpt)
+            end
+        end
+
+        @testset "Allowed input shapes op: +" begin
+            in1, in2 = ones(3), ones(3)
+            op = (x,y) -> x .+ y
+            g1 = remodel(op; assertwarn=false)
+            @test g1(in1, in2) == in1 .+ in2
+            @testset "Inputshape $s1, $s2" for (s1, s2) in (
+                ((3,), (3,)),
+                ((missing,), (missing,)),
+                (missing, missing),
+                )
+                g = remodel(op, s1, s2; assertwarn=false)
+                @test g(in1, in2) == in1 .+ in2
+            end
+        end
+        
+        @testset "Disallowed input shapes op: $(tc[1])" for tc in (
+            (Dense(2,3), ((2,), (3, 1), (missing, ), (1,2,3,4))),
+            (Conv((1,), 2=>3), ((2,), (missing, ), (1,1,1), (2,3,4,5,6), (2,3,4,5))),
+            (Conv((1,1), 2=>3), ((2,), (missing, ), (1,1,1,1), (2,3,4,5,6), (2,3,4))),
+            (MaxPool((2,2)), ((2,), (missing, ), (1,1,1), (2,3,4,5,6))),
+            (RNN(2,3), ((2, ), (missing,), (2,1), (1,2,3), (2,3,4,5,6)))
+        )
+            op, testsizes = tc
+            @testset "Inputshape $s" for s in testsizes
+                @test_throws DimensionMismatch remodel(op, s)
+            end
         end
     end
 end

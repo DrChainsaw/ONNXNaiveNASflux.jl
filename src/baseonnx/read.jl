@@ -47,6 +47,7 @@ end
 
 Base.size(vip::ValueInfoProto) = size(vip._type)
 Base.size(tp::TypeProto) = size(tp.tensor_type)
+Base.size(tp::TensorProto) = tp.dims
 Base.size(tp_t::TypeProto_Tensor) = size(tp_t.shape)
 Base.size(tsp::TensorShapeProto) = size.(Tuple(reverse(tsp.dim)))
 Base.size(tsp_d::TensorShapeProto_Dimension) = hasproperty(tsp_d, :dim_value) ? tsp_d.dim_value : missing

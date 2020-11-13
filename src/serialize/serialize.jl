@@ -96,7 +96,7 @@ Idea is that probe will "record" all seen operations based on how methods for th
 abstract type AbstractProbe end
 
 # Called by several activation functions
-Base.oftype(p::AbstractProbe, x) = x
+Base.oftype(::AbstractProbe, x) = x
 
 """
     ProtoProbe <: AbstractProbe
@@ -135,10 +135,7 @@ newnamestrat(p::ProtoProbe, f, pname=p.name) = ProtoProbe(pname, p.shape, f, p.g
 Return a new `ProtoProbe` with name `outname`. Argument `fshape` is used to determine a new shape (typically a function).
 """
 newfrom(p::ProtoProbe, outname::AbstractString, fshape) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
-
-nextshape(p::AbstractProbe, f::Function) = nextshape(shape(p), f)
-nextshape(::Missing, f::Function) = missing
-nextshape(s::Tuple, f::Function) = f(s)
+nextshape(p::AbstractProbe, f::Function) = f(shape(p))
 
 add!(gp::ONNX.GraphProto, np::ONNX.NodeProto) = push!(gp.node, np)
 
@@ -173,7 +170,7 @@ Argument `outshape` is a function which returns the shape of an `AbstractVertex`
 
 Argument `namestrat` determines how nodes shall be named.
 """
-graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(g.inputs, namestrat) .=> shape.(g.inputs))...;namestrat=namestrat)
+graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(g.inputs, namestrat) .=> outshape.(g.inputs))...;namestrat=namestrat)
 
 """
     graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())
@@ -262,7 +259,7 @@ end
 (l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
 
 attribs(l) = attribs(layertype(l), l)
-attribs(lt::FluxConvolutional{N}, l) where N = ONNX.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
+attribs(::FluxConvolutional{N}, l) where N = ONNX.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
 attribs(l::Union{MaxPool{N}, MeanPool{N}}) where N = ONNX.AttributeProto.(["kernel_shape", "pads", "strides"],  [reverse(l.k), padexpand(Val(N), l.pad), reverse(l.stride)])
 
 # Interleave padding! (1,2) => [2,1,2,1], (1,1,2,2,3,3) => (3,2,1,3,2,1)
@@ -300,8 +297,8 @@ actfun(::FluxBatchNorm, l) = l.λ
 
 NaiveNASflux.layertype(::Flux.RNNCell) = FluxRnn()
 NaiveNASflux.layertype(::Flux.LSTMCell) = FluxLstm()
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wh
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wh
+NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wi
+NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wi
 
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
@@ -336,8 +333,7 @@ function recurrent_node(l, pp, optype)
         attribute = push!(activation_attrib(l), hsattrib),
         op_type=optype))
 
-    # ONNX wants num directions as an extra dimension to output
-    return newfrom(pp, lname, s -> (nout(l), s[2], 1, s[end]))
+    return newfrom(pp, lname, s -> outshape(l, s))
 end
 
 
@@ -357,7 +353,7 @@ function attribfun(fhshape, optype, pps::AbstractProbe...; attributes = ONNX.Att
     name=lname,
     attribute = attributes,
     op_type= optype))
-    return newfrom(pps[1], lname, identity)
+    return newfrom(pps[1], lname, fhshape)
 end
 
 Flux.relu(pp::AbstractProbe) = attribfun(identity, "Relu", pp)
@@ -376,7 +372,7 @@ globalmeanpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalAveragePoo
 globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
 
 function globalpool(pp::AbstractProbe, wrap, type)
-     gpp = attribfun(s -> (1, 1, s[3:end]...), type, pp)
+     gpp = attribfun(s -> ismissing(s) ? s : (1, 1, s[3:end]...), type, pp)
      ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
      wpp = wrap(ppnext)
      return newnamestrat(wpp, nextname(gpp))
@@ -460,7 +456,9 @@ function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
     attrib = if isempty(dims)
         ONNX.AttributeProto[]
     else
-        np_axis = flux2numpydim.(dims, ndims(pps[1]))
+        pok = filter(p -> !ismissing(shape(p)), pps)
+        @assert !isempty(pok) "Must have at least one shape to determine axis!"
+        np_axis = flux2numpydim.(dims, ndims(pok[1]))
         [ONNX.AttributeProto(axname, np_axis)]
     end
 

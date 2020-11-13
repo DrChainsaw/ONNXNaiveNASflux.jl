@@ -23,16 +23,16 @@ Exporting is done using the `onnx` function which accepts a filename `String` or
 onnx("model.onnx", model, inputshapes...)
 
 # Load model as a CompGraph
-graph = CompGraph("model.onnx")
+graph = CompGraph("model.onnx", inputshapes...)
 ```
-Input shapes can be omitted in which case no size information is recorded. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
+Input shapes can be omitted in which case an attempt to infer the shapes will be made. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
 
 Elements of input shape tuples can have one of the following types:
 * `Integer`: The size of the corresponding dimension
 * `Missing`: No shape info will be recorded for this dimension
 * `Symbol` : Use the provided symbol as a variable name in the exported ONNX model
 
-The example below shows some of these options in action.
+Names can be attached to inputs by providing a `Pair` where the first element is the name as a string, for example `"imageinput" => (:W, :H, 3, missing)`. Note that non-integer input sizes will be ignored when loading a model.
 
 More elaborate example with a model defined as a plain Julia function:
 

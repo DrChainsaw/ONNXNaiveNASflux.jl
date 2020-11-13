@@ -10,28 +10,26 @@ Beware that missing/variable size data for a dimension results in a random size 
 extract(modelfile::AbstractString) = open(io -> extract(io), modelfile)
 extract(io::IO) = ONNX.readproto(io, ONNX.ModelProto())
 
-sizes(mp::ONNX.ModelProto) = sizes(mp.graph)
-sizes(gp::ONNX.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
-
 NaiveNASlib.name(n::OnnxNode) = name(n.proto)
 NaiveNASlib.name(n::ONNX.NodeProto) = n.name
 NaiveNASlib.name(vip::ONNX.ValueInfoProto) = vip.name
 NaiveNASlib.name(tp::ONNX.TensorProto) = tp.name
 
 """
-   CompGraph(filename::String)
+   CompGraph(filename::String, insizes...)
 
 Return a [`CompGraph`](@ref) loaded from the given file.
-"""
-NaiveNASlib.CompGraph(filename::String, vfun = create_vertex_default) = open(io -> CompGraph(io, vfun), filename)
-NaiveNASlib.CompGraph(io::IO, vfun = create_vertex_default) = CompGraph(extract(io), vfun)
-NaiveNASlib.CompGraph(m::ONNX.ModelProto, vfun = create_vertex_default) = CompGraph(m.graph, vfun)
 
-function NaiveNASlib.CompGraph(g::ONNX.GraphProto, vfun = create_vertex_default)
-   gb = CompGraphBuilder(g)
-   outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(g.output), gb), vfun)
-   graph = CompGraph(gb.inputs, outputs)
+Argument insizes and be either size tuples or name => tuple pairs indicating the size for each model input.
+"""
+NaiveNASlib.CompGraph(filename::String, insizes...; vfun = create_vertex_default) = open(io -> CompGraph(io, insizes...; vfun), filename)
+NaiveNASlib.CompGraph(io::IO, insizes...; vfun = create_vertex_default) = CompGraph(extract(io), insizes...; vfun)
+NaiveNASlib.CompGraph(m::ONNX.ModelProto, insizes...; vfun = create_vertex_default) = CompGraph(m.graph, insizes...; vfun)
+NaiveNASlib.CompGraph(g::ONNX.GraphProto, insizes...; vfun = create_vertex_default) = CompGraph(CompGraphBuilder(g, insizes...); vfun)
+function NaiveNASlib.CompGraph(gb::CompGraphBuilder; vfun = create_vertex_default)
+   outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(gb.g.output), gb), vfun)
    fix_zerosizes!.(outputs, gb)
+   graph = CompGraph(gb.inputs, outputs)
    return graph
 end
 
@@ -51,7 +49,7 @@ function fix_zerosizes!(v::MutationVertex, gb)
             startnout = nin(vo)[ind]
             Δnout(op(v), startnout)
             NaiveNASlib.reset_out!(op(v))
-        elseif name(v) in keys(gb.sizes)
+        elseif name(v) in keys(gb.sizes) && !isempty(gb.sizes[name(v)])
             # Beware! Uninitialized sizes result in random sizes when loaded?!?!
             # Lets avoid too big sizes
             startnout = gb.sizes[name(v)][first(actdim(v))]

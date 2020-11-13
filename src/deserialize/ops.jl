@@ -7,6 +7,7 @@ const fluxrecurrentlayers = Dict{Symbol, Any}()
 const invariantops = Dict{Symbol, Any}()
 const pseudotransparentops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
+const fluxlayertypes = Dict{Symbol, Any}()
 
 # Rundown of the basic idea here:
 
@@ -36,7 +37,6 @@ const verts = Dict{Symbol, Any}()
 #  GlobalAveragePool end up in invariantops.
 
 # Functions which have dedicated vertex construction methods, such as Concat and Add end up in verts.
-
 
 sources[:Constant] = params -> constant(Val.(keys(params))..., values(params)...)
 constant(::Val{:value}, val::ONNX.TensorProto) = val |> array
@@ -79,6 +79,7 @@ actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros
     @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
     return Conv(flipweights(FluxConv{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
 end
+fluxlayertypes[:Conv] = (weight, bias=nothing) -> FluxConv{length(size(weight))-2}()
 
 actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros()) where {T,N}
     act = get(params, :activation, identity)
@@ -87,6 +88,8 @@ actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros
     β = get(params, :beta, 1)
     return Dense(α * wt(weight), β * bias, act)
 end
+fluxlayertypes[:Gemm] = (pars...) -> FluxDense()
+
 
 actlayers[:BatchNormalization] = function(params, γ, β, μ, σ²)
     λ = get(params, :activation, identity)
@@ -95,6 +98,7 @@ actlayers[:BatchNormalization] = function(params, γ, β, μ, σ²)
 
     return BatchNorm(λ, β, γ, μ, σ², ϵ, momentum)
 end
+fluxlayertypes[:BatchNormalization] = (pars...) -> FluxBatchNorm()
 
 
 default_Wb_Rb(Wh_WBh) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) * 2, size(Wh_WBh, 3))), 0)
@@ -109,6 +113,8 @@ fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb
     cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(b), 0))
     return Flux.Recur(cell, Flux.hidden(cell), h)
 end
+fluxlayertypes[:RNN] = (pars...) -> FluxRnn()
+
 
 fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, 8), c3d=default_init_h(Wb_Rb,8), peep=nothing)
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
@@ -127,6 +133,7 @@ fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_R
     cell = Flux.LSTMCell(Wi, Wh, b, fill!(similar(b), 0), fill!(similar(b), 0))
     return Flux.Recur(cell, Flux.hidden(cell), (h, c))
 end
+fluxlayertypes[:LSTM] = (pars...) -> FluxLstm()
 
 function recurrent_arrays(lt, Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     # ONNX weights are on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
@@ -145,18 +152,26 @@ fluxlayers[:MaxPool] = function(params)
     _,k,p,s,_ = akpsd(params)
     return MaxPool(k, pad=p, stride=s)
 end
+fluxlayertypes[:MaxPool] = (pars...) -> FluxNoParLayer()
+
 
 fluxlayers[:AveragePool] = function(params)
     _,k,p,s,_ = akpsd(params)
     return MeanPool(k, pad=p, stride=s)
 end
+fluxlayertypes[:AveragePool] = (pars...) -> FluxNoParLayer()
+
 
 fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
+fluxlayertypes[:Dropout] = (pars...) -> FluxNoParLayer()
+
 
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
     return x -> globalmeanpool(x, wrap)
 end
+fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxNoParLayer()
+
 function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MeanPool(size(x)[1:N-2])(x))
 end
@@ -165,6 +180,8 @@ invariantops[:GlobalMaxPool] = function(params)
     wrap = get(params, :wrap, identity)
     return x -> globalmaxpool(x, wrap)
 end
+fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxNoParLayer()
+
 function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MaxPool(size(x)[1:N-2])(x))
 end
@@ -224,8 +241,8 @@ end
 
 verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
+    ltype = params[:ltype]
     indims = length(inshape)
-    ltype = guess_layertype(indims)
     insize = indims > 0 ? inshape[max(1, actdim(ltype))] : 1 # assume scalar
     return inputvertex(name, insize, ltype)
 end
@@ -243,7 +260,7 @@ function elemwisevertex(name, inputs, params, op, id; traitdecoration=identity, 
 end
 
 
-verts[:Concat] =  function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
+verts[:Concat] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
     dims = numpy2fluxdim(params[:axis], inputs[1])
     return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap=layerfun, kwargs...)
 end
@@ -286,6 +303,10 @@ function refresh()
             @assert isempty(inputs) "Source of type $s got inputs $(inputs)!"
             return sourcevertex_with_outputs(f(args...), name)
         end
+    end
+
+    for s in keys(verts)
+        get!(fluxlayertypes, s, (args...) -> missing)
     end
 
 end

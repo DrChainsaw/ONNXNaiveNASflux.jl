@@ -57,9 +57,25 @@ function unflipweights(::FluxLstm, w, hsize)
 end
 
 outshape(l, s) = outshape(layertype(l), l, s)
+outshape(::FluxParLayer, l, ::Missing) = outshape(l, shape(layertype(l), nin(l))) 
+outshape(lt, l, ::Missing) = missing
 
-outshape(lt::FluxDense, l, s) = (nout(l), s[end])
-function outshape(lt::FluxConvolutional{N}, l, s) where N
+function outshape(::FluxDense, l, s::Tuple) 
+    assertshape(s, 2, l)
+    assertsize(s[1], nin(l), l)
+    return (nout(l), s[end])
+end
+function outshape(::FluxRecurrent, l, s::Tuple)
+    assertshape(s, (3, 4), l)
+    assertsize(s[1], nin(l), l)
+    # ONNX wants num directions as an extra dimension to output
+    # Fluxs RNNs are not bidirectional so num directions is always 1
+    return (nout(l), s[2], 1, s[end])
+end
+
+function outshape(::FluxConvolutional{N}, l, s::Tuple) where N
+    assertshape(s, N+2, l)
+    assertsize(s[N+1], nin(l), l)
     p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
     k = size(weights(l))[1:N]
     d = l.dilation
@@ -69,11 +85,12 @@ function outshape(lt::FluxConvolutional{N}, l, s) where N
         # Conv arithmetic from https://arxiv.org/pdf/1603.07285.pdf
         aggshape(x -> (x + p[i] - k[i] - (k[i] - 1)*(d[i] - 1)) ÷ stride[i] + 1, si)
     end
-
-    return (o..., nout(l), s[end])
+    return (o..., nout(l), s[N+2])
 end
 
-function outsize(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s) where N
+outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, ::Missing) where N = outshape(l, ntuple(i->missing, N+2))
+function outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s::Tuple) where N
+    assertshape(s, N+2, l)
     p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
     k = l.k
     stride = l.stride
@@ -83,5 +100,17 @@ function outsize(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s) where N
         aggshape(x -> (x + p[i] - k[i]) ÷ stride[i] + 1, si)
     end
 
-    return (o..., nout(l), s[end])
+    return (o..., s[N+1], s[N+2])
 end
+
+function assertshape(s, expected, lmsg)
+    if all(!=(length(s)), expected)
+        throw(DimensionMismatch("Wrong input dimension for $(lmsg)! Expected $(join(expected,", ", " or ")) dimensions, got shape $s"))
+    end
+end
+function assertsize(s::Integer, expected, lmsg)
+    if s != expected
+        throw(DimensionMismatch("Wrong input size for $(lmsg)! Expected $expected elements, got size $s"))
+    end
+end
+function assertsize(s, expected, lmsg) end
