@@ -306,3 +306,36 @@ end
         @test_throws AssertionError CompGraph(sumgraph(), inshapes...)
     end
 end
+
+@testset "Deserialize with merging" begin
+    function remodel(f, args...) 
+        pb = PipeBuffer()
+        onnx(pb, f, args...)
+        return CompGraph(pb, args...)
+    end
+
+
+    @testset "Merge activation function" begin
+        m = remodel(Dense(3,4, relu), (3, missing))
+        @test nv(m) == 2
+        @test layer(m.outputs[1]).σ == relu
+    end
+
+    @testset "Merge Reshape and $gp" for gp in (
+        ONNXmutable.globalmeanpool,
+        ONNXmutable.globalmaxpool
+    ) 
+        m = remodel(Chain(
+            Conv((3,3), 3 => 3),
+            x -> ONNXmutable.globalmeanpool(x, xf -> reshape(xf, 3, :)),
+        ), (4, 4, 3, missing))
+
+        @test nv(m) == 3
+    end
+
+    @testset "Merge constant" begin
+        m = remodel(x -> relu.(x) .+ (3))
+        @test nv(m) == 3
+        @test m([-1,1]) == [3, 4] 
+    end
+end

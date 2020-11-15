@@ -44,7 +44,7 @@ check_actfun(nact::OnnxNode, gb::CompGraphBuilder, nlayer::OnnxNode, ::Activatio
 
 function wrapfrom(nwrap::OnnxNode, nwrapped::OnnxNode, gb::CompGraphBuilder, attrib, from::AbstractDict=invariantops)
    @debug "Merge node $nwrap and node $nwrapped"
-   nwrapped.attribute[attrib] = from[optype(nwrap)](nwrap.attribute, params(nwrap, gb)...)
+   nwrapped.attribute[attrib] = from[optype(nwrap)](nwrap.attribute, params(nwrap)...)
    return retnode(nwrapped, gb)
 end
 
@@ -103,6 +103,6 @@ check_elemwise(::OnnxNode, ::CompGraphBuilder, innode::OnnxNode, ot) = innode
 
 function check_elemwise(nelemwise::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{:Constant})
    consts = get!(nelemwise.attribute, :Constant, [])
-   push!(consts, sources[optype(innode)](innode.attribute, params(innode, gb)...))
+   push!(consts, sources[optype(innode)](innode.attribute, params(innode)...))
    return nothing
 end
