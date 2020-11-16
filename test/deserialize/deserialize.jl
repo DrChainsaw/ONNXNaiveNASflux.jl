@@ -327,7 +327,7 @@ end
     ) 
         m = remodel(Chain(
             Conv((3,3), 3 => 3),
-            x -> ONNXmutable.globalmeanpool(x, xf -> reshape(xf, 3, :)),
+            x -> gp(x, xf -> reshape(xf, 3, :)),
         ), (4, 4, 3, missing))
 
         @test nv(m) == 3
