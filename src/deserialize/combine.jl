@@ -44,7 +44,7 @@ check_actfun(nact::OnnxNode, gb::CompGraphBuilder, nlayer::OnnxNode, ::Activatio
 
 function wrapfrom(nwrap::OnnxNode, nwrapped::OnnxNode, gb::CompGraphBuilder, attrib, from::AbstractDict=invariantops)
    @debug "Merge node $nwrap and node $nwrapped"
-   nwrapped.attribute[attrib] = from[optype(nwrap)](nwrap.attribute, params(nwrap, gb)...)
+   nwrapped.attribute[attrib] = from[optype(nwrap)](nwrap.attribute, params(nwrap)...)
    return retnode(nwrapped, gb)
 end
 
@@ -57,6 +57,7 @@ check_reshape(nreshape::OnnxNode, gb::CompGraphBuilder, args...) = retnode(nresh
 check_reshape(nreshape::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode) = check_reshape(nreshape, gb, innode, optrait(innode))
 
 check_reshape(nreshape::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{:GlobalAveragePool}) = wrapfrom(nreshape, innode, gb, :wrap, pseudotransparentops)
+check_reshape(nreshape::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{:GlobalMaxPool}) = wrapfrom(nreshape, innode, gb, :wrap, pseudotransparentops)
 
 check_reshape(nreshape::OnnxNode, gb::CompGraphBuilder, nrec::OnnxNode, ::RecurrentLayer) = check_recurrent_reshape(nreshape, gb, nrec)
 check_reshape(nreshape::OnnxNode, gb::CompGraphBuilder, nsqueeze::OnnxNode, ::Val{:Squeeze}) = check_recurrent_reshape(nreshape, gb, innodes(nsqueeze, gb)...)
@@ -86,6 +87,8 @@ check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, args...) = retnode(nsque
 check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode) = check_squeeze(nsqueeze, gb, innode, optrait(innode))
 
 check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{:GlobalAveragePool}) = wrapfrom(nsqueeze, innode, gb, :wrap)
+check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{:GlobalMaxPool}) = wrapfrom(nsqueeze, innode, gb, :wrap)
+
 function check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::RecurrentLayer)
    @debug "Remove squeeze after $innode"
    return retnode(innode, gb)
@@ -103,6 +106,6 @@ check_elemwise(::OnnxNode, ::CompGraphBuilder, innode::OnnxNode, ot) = innode
 
 function check_elemwise(nelemwise::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{:Constant})
    consts = get!(nelemwise.attribute, :Constant, [])
-   push!(consts, sources[optype(innode)](innode.attribute, params(innode, gb)...))
+   push!(consts, sources[optype(innode)](innode.attribute, params(innode)...))
    return nothing
 end
