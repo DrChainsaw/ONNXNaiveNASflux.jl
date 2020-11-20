@@ -1,6 +1,6 @@
 
 @testset "Structure" begin
-    import ONNXmutable: OnnxNode, input, output, optype
+    import ONNXmutable: OnnxNode, input, output, optype, array
 
     function serdeser(p::T, convfun = cfun(p)) where T
         iob = PipeBuffer();

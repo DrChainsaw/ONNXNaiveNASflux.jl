@@ -5,8 +5,9 @@ using Conda
 
 function onnxruntime_infer(f, inputs...)
 	if "onnxruntime" ∉ Conda._installed_packages()
-		pip = joinpath(Conda.SCRIPTDIR, "pip")
-		run(`$pip install onnxruntime==1.4 --no-warn-script-location`)
+		# TODO: Add some kind of warning if an incompatible default python installation is used due to ENV["PYTHON"] not being set to ""
+		Conda.pip_interop(true)
+		Conda.pip("install --no-warn-script-location", "onnxruntime==1.4")
 	end
 
 	modfile = "tmpmodel.onnx"
