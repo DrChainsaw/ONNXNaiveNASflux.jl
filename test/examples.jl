@@ -1,7 +1,7 @@
 
 
 @testset "Basic ser/deser example" begin
-    using ONNXmutable, NaiveNASflux, Test, Statistics
+    using ONNXmutable, Test, Statistics
 
     l1 = Conv((3,3), 2=>3, relu)
     l2 = Dense(3, 4, elu)

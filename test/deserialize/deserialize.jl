@@ -1,5 +1,5 @@
 import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
-using NaiveNASflux
+using ONNXmutable.NaiveNASflux
 
 # Logging to avoid travis timeouts
 @info "  Test padding and sources"

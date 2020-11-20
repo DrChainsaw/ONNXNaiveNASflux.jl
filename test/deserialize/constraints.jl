@@ -1,6 +1,6 @@
 
 @testset "Constraints" begin
-    using NaiveNASflux
+    using ONNXmutable.NaiveNASflux
     import ONNXmutable: SizePseudoTransparent
 
     dv(name, invertex, outsize) = mutable(name, Dense(nout(invertex), outsize), invertex)

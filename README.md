@@ -37,7 +37,7 @@ Names can be attached to inputs by providing a `Pair` where the first element is
 More elaborate example with a model defined as a plain Julia function:
 
 ```julia
-using ONNXmutable, NaiveNASflux, Test, Statistics
+using ONNXmutable, Test, Statistics
 
 l1 = Conv((3,3), 2=>3, relu)
 l2 = Dense(3, 4, elu)
