@@ -13,7 +13,7 @@ Model export does not require the model to have any particular format. Almost an
 ## Basic usage
 
 ```julia
-Pkg.add("https://github.com/DrChainsaw/ONNXmutable.jl")
+Pkg.add(url="https://github.com/DrChainsaw/ONNXmutable.jl")
 ```
 
 Exporting is done using the `onnx` function which accepts a filename `String` or an `IO` as first argument:
