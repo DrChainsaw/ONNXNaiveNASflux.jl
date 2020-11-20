@@ -205,7 +205,7 @@
             (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
             (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
             )
-            import NaiveNASflux: hiddenweights
+            import ONNXmutable.NaiveNASflux: hiddenweights
 
             inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
