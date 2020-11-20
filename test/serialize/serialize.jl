@@ -23,8 +23,8 @@
     @testset "Nodes" begin
         using Statistics
         import ONNXmutable: optype, actfuns, fluxlayers, invariantops
-        using NaiveNASflux
-        import NaiveNASflux: weights, bias
+        using ONNXmutable.NaiveNASflux
+        import ONNXmutable.NaiveNASflux: weights, bias
         import ONNXmutable: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape
         struct NodeProbe{F, S} <: AbstractProbe
             name::String
@@ -205,7 +205,7 @@
             (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
             (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
             )
-            import NaiveNASflux: hiddenweights
+            import ONNXmutable.NaiveNASflux: hiddenweights
 
             inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
@@ -282,7 +282,7 @@
     end
 
     @testset "Graphs" begin
-        using NaiveNASflux
+        using ONNXmutable.NaiveNASflux
         import ONNXmutable: graphproto, modelproto, validate
 
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
@@ -788,7 +788,7 @@
     end
 
     @testset "Save to file" begin
-        using NaiveNASflux
+        using ONNXmutable.NaiveNASflux
         function tryfile(filename, args...; kwargs...)
             try
                 onnx(filename, args...; kwargs...)
