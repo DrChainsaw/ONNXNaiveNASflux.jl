@@ -14,5 +14,6 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 [compat]
 JuMP = "0.21"
 NaiveNASflux = "1.5"
+ProtoBuf = "= 0.9.0"
 Setfield = "0.3.4, 0.5, 0.6, 0.7"
 julia = "1"
