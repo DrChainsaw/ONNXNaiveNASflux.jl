@@ -510,6 +510,8 @@ function Base.reshape(pp::AbstractProbe, shape::Tuple)
 end
 expanddims(p::AbstractProbe, x, dims) = p
 
+Flux.flatten(pp::AbstractProbe) = flatten(pp, ndims(pp)-1)
+
 function flatten(pp::AbstractProbe, dim)
     fname = recursename("Flatten", nextname(pp))
 

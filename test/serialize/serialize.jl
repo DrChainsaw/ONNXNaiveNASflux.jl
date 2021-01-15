@@ -117,6 +117,28 @@
             @test collect(skipmissing(shapeout)) == [:A, 3, 2]
         end
 
+        @testset "Flatten" begin
+            import ONNXmutable.NaiveNASflux.Flux: flatten
+            inprobe = NodeProbe("input", f -> "output", (2, 3, 5))
+
+            outprobe = Flux.flatten(inprobe)
+            shapeout = shape(outprobe)
+
+            @test length(outprobe.protos) == 1
+
+            res = serdeser(outprobe.protos[1])
+
+            @test input(res) == [name(inprobe)]
+            @test output(res) == [name(outprobe)]
+            @test optype(res) == :Flatten
+            @test name(res) == name(outprobe)
+            @test res.attribute[:axis] == -2
+
+            op = ONNXmutable.pseudotransparentops[optype(res)](res.attribute)
+            indata = reshape(collect(1:2*3*5), 2,3,5)
+            @test op(indata) == flatten(indata)
+        end
+
         @testset "Pad expand" begin
             import ONNXmutable: padexpand
             @test padexpand(Val(1), (1,)) == [1,1]
@@ -694,10 +716,19 @@
             test_named_graph(CompGraph(v0, v3), (2,3))
         end
 
-        @testset "Conv to flatten to Dense" begin
+        @testset "Conv to Flatten to Dense" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv", v0, 4, relu)
             v2 = absorbvertex(ONNXmutable.Flatten(3), 24, v1, traitdecoration = t -> NamedTrait(t, "flatten"))
+            v3 = dense("dense", v2, 3, elu)
+
+            test_named_graph(CompGraph(v0, v3), (2,3))
+        end
+
+        @testset "Conv to flatten to Dense" begin
+            v0 = inputvertex("input", 3, FluxConv{2}())
+            v1 = convvertex("conv", v0, 4, relu)
+            v2 = absorbvertex(Flux.flatten, 24, v1, traitdecoration = t -> NamedTrait(t, "flatten"))
             v3 = dense("dense", v2, 3, elu)
 
             test_named_graph(CompGraph(v0, v3), (2,3))
