@@ -38,7 +38,7 @@ function name_runningnr(namefun = genname)
 end
 
 genname(v::AbstractVertex) = name(v)
-genname(f::F) where F = lowercase(string(F.name))
+genname(f::F) where F = lowercase(string(nameof(F)))
 genname(s::AbstractString) = s
 genname(f::Function) = lowercase(string(f))
 
