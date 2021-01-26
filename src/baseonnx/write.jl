@@ -4,14 +4,19 @@ ValueInfoProto(name::String, inshape, elemtype=Float32) =
 ValueInfoProto(
     name=name,
     _type=TypeProto(
-        tensor_type=TypeProto_Tensor(
-            elem_type=tp_tensor_elemtype(elemtype),
-            shape=TensorShapeProto(inshape)
-        )
+        tensor_type=TypeProto_Tensor(inshape, elemtype)
     )
 )
+
+TypeProto_Tensor(inshape, elemtype) = TypeProto_Tensor(
+    elem_type=tp_tensor_elemtype(elemtype),
+    shape=TensorShapeProto(inshape)
+)
+TypeProto_Tensor(::Missing, elemtype) = TypeProto_Tensor(
+    elem_type=tp_tensor_elemtype(elemtype)
+)
+
 TensorShapeProto(shape) = TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
-TensorShapeProto(::Missing) = TensorShapeProto()
 tsp_d(::Missing) = TensorShapeProto_Dimension()
 tsp_d(n::Integer) = TensorShapeProto_Dimension(dim_value=n)
 tsp_d(s::String) = TensorShapeProto_Dimension(dim_param=s)

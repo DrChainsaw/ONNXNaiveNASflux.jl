@@ -275,7 +275,7 @@ end
         return pb
     end
 
-    insize(t::Tuple) = ONNXmutable.clean_size(t[NaiveNASflux.actdim(length(t))])
+    insize(t::Tuple) = ONNXmutable.int_size(t[NaiveNASflux.actdim(length(t))])
     insize(p::Pair) = p |> last |> insize
     @testset "Input format $inshapes" for inshapes in (
         ((4,1), (4,1)),

@@ -44,10 +44,11 @@ end
 sizes(mp::ONNX.ModelProto) = sizes(mp.graph)
 sizes(gp::ONNX.GraphProto) = Dict((name.(gp.input) .=> size.(gp.input))..., (name.(gp.output) .=> size.(gp.output))...)
 
-clean_size(d::AbstractDict) = Dict(k => clean_size(v) for (k,v) in pairs(d))
-clean_size(t::Tuple) = clean_size.(t)
-clean_size(i::Integer) = i
-clean_size(::Any) = 0
+clean_size(d::AbstractDict) = Dict(k => clean_size(v) for (k,v) in d)
+clean_size(t::Tuple) = int_size.(t)
+clean_size(::Missing) = tuple()
+int_size(i::Integer) = i
+int_size(::Any) = 0
 
 function output_to_node(nodes, initdict)
    allnodes = Dict{String, OnnxNode}()
@@ -111,7 +112,7 @@ function select_layertype(inname, inshape, lts::Tuple)
    ltsvalid = filter(lts) do lt
       length(inshape) == 0 || length(inshape) == length(shape(lt, 0))
    end |> unique
-
+   
    length(ltsvalid) == 1 && return ltsvalid[1]
    length(ltsvalid) == 0 && return guess_layertype(length(inshape))
    @warn "Multiple layertypes found for input $inname with shape $inshape: $(ltsvalid)! Graph mutation near this vertex might fail!"
