@@ -816,6 +816,22 @@
             g_new = CompGraph(mt)
             g_org([1,2], [3,4]) == g_new([1,2], [3,4])
         end
+
+        @testset "$(cfun(l)) infer" for (l, expshape) in (
+            (Dense(2,3), (2,0)),
+            (Conv((1, 1), 2=>3), (0,0,2,0)), 
+            (RNN(2,3), (2,0,0)), 
+            (LSTM(2,3), (2,0,0)), 
+            (SkipConnection(Dense(2,2), +), (2,0)),
+            ), cfun in (Chain, l -> Chain(BatchNorm(nin(l)), l))
+
+            c_org = cfun(l)
+
+            mt = modelproto(c_org) |> serdeser
+            ss = sizes(mt)
+ 
+            @test ss["data_0"] == expshape
+        end
     end
 
     @testset "Save to file" begin
@@ -884,7 +900,7 @@
         function remodel(m, args...; assertwarn=true)
             pb = PipeBuffer()
             onnx(pb, m, args...)
-            if assertwarn && (isempty(args) || any(ismissing, args))
+            if assertwarn && any(ismissing, args)
                 return @test_logs (:warn, r"Mismatched") CompGraph(pb)
             end
             return CompGraph(pb)
@@ -911,7 +927,7 @@
         @testset "Allowed input shapes op: +" begin
             in1, in2 = ones(3), ones(3)
             op = (x,y) -> x .+ y
-            g1 = remodel(op; assertwarn=false)
+            g1 = remodel(op)
             @test g1(in1, in2) == in1 .+ in2
             @testset "Inputshape $s1, $s2" for (s1, s2) in (
                 ((3,), (3,)),
