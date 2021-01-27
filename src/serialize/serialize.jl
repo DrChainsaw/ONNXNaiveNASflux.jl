@@ -69,7 +69,17 @@ function modelproto(g::CompGraph; modelname="model", outshape = shape, namestrat
     return mp
 end
 
-function infer_inshapes(f)
+function infer_inshapes(c::Chain)
+    sh = infer_inshapes(first(c))
+    sh isa FluxLayer && length(c) > 1 && return infer_inshapes(Chain(Base.tail(c.layers)...))
+    return sh
+end
+infer_inshapes(sc::SkipConnection) = infer_inshapes(sc.layers)
+infer_inshapes(l) = infer_inshapes(layertype(l), l)
+infer_inshapes(lt::FluxTransparentLayer, ::Any) = lt 
+infer_inshapes(lt::FluxParLayer, l) = tuple(shape(lt, nin(l)))
+
+function infer_inshapes(::Any, f)
     ml = methods(f);
     for m in ml.ms
         m.sig isa DataType && return Tuple(infer_shape.(m.sig.types[2:end]))

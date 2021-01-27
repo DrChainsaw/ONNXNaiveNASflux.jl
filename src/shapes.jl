@@ -6,6 +6,8 @@ NaiveNASflux.outdim(::Shape1D) = 1
 NaiveNASflux.actdim(::Shape1D) = 1
 NaiveNASflux.actrank(::Shape1D) = 0
 
+# TODO: Move to NaiveNASflux
+NaiveNASflux.nin(sc::SkipConnection) = nin(sc.layers)
 
 numpy2fluxdim(np_axis, v::AbstractVertex) = numpy2fluxdim(np_axis, 1 + NaiveNASflux.actrank(v)[1])
 numpy2fluxdim(np_axis, ndims) = np_axis >= 0 ? ndims - np_axis : abs(np_axis)
