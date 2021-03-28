@@ -81,12 +81,20 @@ actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros
 end
 fluxlayertypes[:Conv] = (weight, bias=nothing) -> FluxConv{length(size(weight))-2}()
 
+biasarray(b::Flux.Zeros, esize, β) = b
+biasarray(b::AbstractArray, esize, β) = length(b) === 1 ? repeat(β .* vec(b), esize) : β .* reshape(b, :)
+biasarray(b::Number, esize, β) = repeat([β * b], esize)
+
 actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros()) where {T,N}
     act = get(params, :activation, identity)
     wt = Bool(get(params, :transB, 0)) ? permutedims : identity
     α = get(params, :alpha, 1)
     β = get(params, :beta, 1)
-    return Dense(α * wt(weight), β * bias, act)
+
+    weight = α .* wt(weight)
+    bias = biasarray(bias, size(weight, 1), β)
+
+    return Dense(weight , bias, act)
 end
 fluxlayertypes[:Gemm] = (pars...) -> FluxDense()
 
@@ -96,7 +104,7 @@ actlayers[:BatchNormalization] = function(params, γ, β, μ, σ²)
     ϵ = get(params, :epsilon, 1f-5)
     momentum = get(params, :momentum, 9f-1)
 
-    return BatchNorm(λ, β, γ, μ, σ², ϵ, momentum)
+    return BatchNorm(λ, β, γ, μ, σ², ϵ, momentum, true, true, nothing, length(γ))
 end
 fluxlayertypes[:BatchNormalization] = (pars...) -> FluxBatchNorm()
 
@@ -110,8 +118,8 @@ fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb
 
     Wi,Wh,b,h = recurrent_arrays(FluxRnn(), Wi_WBi, Wh_WBh, Wb_Rb, h3d)
     act = rnnactfuns[Symbol(get(params, :activations, ["Tanh"])[])](1, params)
-    cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(b), 0))
-    return Flux.Recur(cell, Flux.hidden(cell), h)
+    cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(h), 0))
+    return Flux.Recur(cell, h)
 end
 fluxlayertypes[:RNN] = (pars...) -> FluxRnn()
 
@@ -130,8 +138,8 @@ fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_R
 
     # b, h and c must all be of the same type when creating a cell, but
     # it is actually Recur which has the state
-    cell = Flux.LSTMCell(Wi, Wh, b, fill!(similar(b), 0), fill!(similar(b), 0))
-    return Flux.Recur(cell, Flux.hidden(cell), (h, c))
+    cell = Flux.LSTMCell(Wi, Wh, b, (fill!(similar(h), 0), fill!(similar(c), 0)))
+    return Flux.Recur(cell, (h, c))
 end
 fluxlayertypes[:LSTM] = (pars...) -> FluxLstm()
 
@@ -144,8 +152,7 @@ function recurrent_arrays(lt, Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     Wi = unflipweights(lt, permutedims(dropdims(Wi_WBi, dims=3)), hsize)
     Wh = unflipweights(lt, permutedims(dropdims(Wh_WBh, dims=3)), hsize)
     b = Wb_Rb isa Flux.Zeros ? Wb_Rb : dropdims(unflipweights(lt, sum(reshape(Wb_Rb, :, 2), dims=2), hsize),dims=2)
-    hs = (dropdims(h, dims=ndims(h)) for h in h3ds)
-    return Wi, Wh, b, hs...
+    return Wi, Wh, b, h3ds...
 end
 
 fluxlayers[:MaxPool] = function(params)
