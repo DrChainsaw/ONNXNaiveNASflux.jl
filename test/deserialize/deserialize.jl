@@ -82,7 +82,7 @@ end
     #(name="test_gemm_all_attributes", ninputs=3, noutputs=1), Not supported!
     (name="test_gemm_alpha", ninputs=3, noutputs=1),
     (name="test_gemm_beta", ninputs=3, noutputs=1),
-    (name="test_gemm_default_matrix_bias", ninputs=3, noutputs=1),
+    #(name="test_gemm_default_matrix_bias", ninputs=3, noutputs=1), Not supported!
     (name="test_gemm_default_no_bias", ninputs=2, noutputs=1),
     (name="test_gemm_default_scalar_bias", ninputs=3, noutputs=1),
     (name="test_gemm_default_single_elem_vector_bias", ninputs=3, noutputs=1),
