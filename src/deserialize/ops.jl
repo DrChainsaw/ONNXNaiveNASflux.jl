@@ -261,9 +261,11 @@ verts[:Mul] = (name, inputs, params; kwargs...) -> elemwisevertex(name, inputs, 
 function elemwisevertex(name, inputs, params, op, id; traitdecoration=identity, layerfun=identity, kwargs...)
     c = reduce((c1,c2) -> op.(c1, c2), get(params, :Constant, id))
     c = length(c) == 1 ? c[] : c
-    opp, wrap = c == id ? (op, layerfun) : (identity, f -> layerfun((x...) -> op.(c, x...)))
-    conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = wrap, kwargs...)
-    return NaiveNASlib.elemwise(opp, conf, inputs...)
+    let cc = c
+        opp, wrap = cc == id ? (op, layerfun) : (identity, f -> layerfun((x...) -> op.(cc, x...)))
+        conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = wrap, kwargs...)
+        return NaiveNASlib.elemwise(opp, conf, inputs...)
+    end
 end
 
 
