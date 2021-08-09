@@ -1,11 +1,11 @@
-import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
-using ONNXmutable.NaiveNASflux
+import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
+using ONNXNaiveNASflux.NaiveNASflux
 
 # Logging to avoid travis timeouts
 @info "  Test padding and sources"
 
 @testset "Read padding" begin
-    import ONNXmutable: prev
+    import ONNXNaiveNASflux: prev
 
     @test prev(2) == 2
     @test prev([1,2]) == [1,2]
@@ -275,7 +275,7 @@ end
         return pb
     end
 
-    insize(t::Tuple) = ONNXmutable.int_size(t[NaiveNASflux.actdim(length(t))])
+    insize(t::Tuple) = ONNXNaiveNASflux.int_size(t[NaiveNASflux.actdim(length(t))])
     insize(p::Pair) = p |> last |> insize
     @testset "Input format $inshapes" for inshapes in (
         ((4,1), (4,1)),
@@ -288,7 +288,7 @@ end
         @test layertype.(g_new.inputs) == [FluxDense(), FluxDense()]
     end
 
-    inshape(t::Tuple) = t |> length |> ONNXmutable.guess_layertype
+    inshape(t::Tuple) = t |> length |> ONNXNaiveNASflux.guess_layertype
     @testset "Mixshape format $inshapes" for inshapes in (
         ((1,1,5,1), (5,1)),
         ((5,1), (1,1,5,1)),
@@ -322,8 +322,8 @@ end
     end
 
     @testset "Merge Reshape and $gp" for gp in (
-        ONNXmutable.globalmeanpool,
-        ONNXmutable.globalmaxpool
+        ONNXNaiveNASflux.globalmeanpool,
+        ONNXNaiveNASflux.globalmaxpool
     ) 
         m = remodel(Chain(
             Conv((3,3), 3 => 3),

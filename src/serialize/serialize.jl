@@ -92,7 +92,7 @@ infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
 modelproto(;kwargs...) = ONNX.ModelProto(;
     ir_version=6,
     opset_import=[ONNX.OperatorSetIdProto(version=11)],
-    producer_name="ONNXmutable.jl",
+    producer_name="ONNXNaiveNASflux.jl",
     producer_version=string(Pkg.Types.Context().env.project.version), # TODO: Ugh....
     kwargs...)
 
@@ -429,7 +429,7 @@ argpermswith(t, n::Integer, args...) = (a for a in argpermutations(n, t, args...
 
 function gen_broadcastable_elemwise(f, optype, n=2)
     fs = Symbol(f)
-    fm = which(ONNXmutable, fs)
+    fm = which(ONNXNaiveNASflux, fs)
     generate_elemwise(fm, fs, optype, argpermswith(AbstractProbe, n, nothing))
     override_broadcast(f, argpermswith(Base.RefValue{<:AbstractProbe}, n, AbstractArray))
 end

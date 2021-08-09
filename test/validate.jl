@@ -1,6 +1,6 @@
 @testset "Validate" begin
-    import ONNXmutable: modelproto, graphproto
-    import ONNXmutable: validate, uniqueoutput, optypedefined, outputused, inputused, hasname, ONNX.NodeProto
+    import ONNXNaiveNASflux: modelproto, graphproto
+    import ONNXNaiveNASflux: validate, uniqueoutput, optypedefined, outputused, inputused, hasname, ONNX.NodeProto
 
     np(ins,outs,op="A") = ONNX.NodeProto(input=ins, output=outs, op_type=op)
     vip(name,shape=(2,:A)) = ONNX.ValueInfoProto(name, shape)

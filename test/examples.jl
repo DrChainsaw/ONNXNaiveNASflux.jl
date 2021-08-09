@@ -1,7 +1,7 @@
 
 
 @testset "Basic ser/deser example" begin
-    using ONNXmutable, Test, Statistics
+    using ONNXNaiveNASflux, Test, Statistics
 
     l1 = Conv((3,3), 2=>3, relu)
     l2 = Dense(3, 4, elu)
@@ -45,7 +45,7 @@ end
     want = sosec
     add = false
     found = String[]
-    for line in eachline(joinpath(dirname(pathof(ONNXmutable)),"..", "README.md"))
+    for line in eachline(joinpath(dirname(pathof(ONNXNaiveNASflux)),"..", "README.md"))
         add && line == bts && break
         add && !isempty(line) && push!(found, line)
         if line == sosec
@@ -57,7 +57,7 @@ end
     end
 
     io = IOBuffer()
-    ONNXmutable.list_supported_ops(io)
+    ONNXNaiveNASflux.list_supported_ops(io)
 
     actual = split(String(take!(io)), "\n"; keepempty=false);
 
@@ -66,7 +66,7 @@ end
 
 @testset "Custom serialization example" begin
 
-    import ONNXmutable: AbstractProbe, recursename, nextname, newfrom, add!, name, ONNX
+    import ONNXNaiveNASflux: AbstractProbe, recursename, nextname, newfrom, add!, name, ONNX
     function myfun(probes::AbstractProbe...)
         p = probes[1] # select any probe
         optype = "MyOpType"
@@ -86,8 +86,8 @@ end
         return newfrom(p, nodename, s -> s)
     end
 
-    gp = ONNXmutable.graphproto()
-    pps = ONNXmutable.inputprotoprobe!.(Ref(gp), ("in1", "in2"), ((1,2), (3,4)), s -> "out")
+    gp = ONNXNaiveNASflux.graphproto()
+    pps = ONNXNaiveNASflux.inputprotoprobe!.(Ref(gp), ("in1", "in2"), ((1,2), (3,4)), s -> "out")
     pp = myfun(pps...)
 
     @test name(pp) == "out"
@@ -99,7 +99,7 @@ end
 end
 
 @testset "Custom deserialization example" begin
-    import ONNXmutable: actfuns
+    import ONNXNaiveNASflux: actfuns
 
     # All inputs which are not output from another node in the graph are provided in the method call
     actfuns[:MyActFun1] = (params, α, β) -> x -> x^α + β
@@ -108,19 +108,19 @@ end
         α = get(params, :alpha, 1)
         return x -> α / x
     end
-    ONNXmutable.refresh()
+    ONNXNaiveNASflux.refresh()
 
-    af1 = ONNXmutable.verts[:MyActFun1]("af1", [inputvertex("in", 3)], Dict(), 2, 3)
+    af1 = ONNXNaiveNASflux.verts[:MyActFun1]("af1", [inputvertex("in", 3)], Dict(), 2, 3)
     @test af1(4) == 4^2 + 3
 
-    af2 = ONNXmutable.verts[:MyActFun2]("af2", [inputvertex("in", 3)], Dict(:alpha => 3))
+    af2 = ONNXNaiveNASflux.verts[:MyActFun2]("af2", [inputvertex("in", 3)], Dict(:alpha => 3))
     @test af2(4) == 3/4
 
-    delete!(ONNXmutable.verts, :MyActFun1)
-    delete!(ONNXmutable.verts, :MyActFun2)
-    delete!(ONNXmutable.invariantops, :MyActFun1)
-    delete!(ONNXmutable.invariantops, :MyActFun2)
+    delete!(ONNXNaiveNASflux.verts, :MyActFun1)
+    delete!(ONNXNaiveNASflux.verts, :MyActFun2)
+    delete!(ONNXNaiveNASflux.invariantops, :MyActFun1)
+    delete!(ONNXNaiveNASflux.invariantops, :MyActFun2)
     delete!(actfuns, :MyActFun1)
     delete!(actfuns, :MyActFun2)
-    ONNXmutable.refresh()
+    ONNXNaiveNASflux.refresh()
 end

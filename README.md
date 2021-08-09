@@ -1,19 +1,19 @@
-# ONNXmutable
+# ONNXNaiveNASflux
 
-[![Build status](https://github.com/DrChainsaw/ONNXmutable.jl/workflows/CI/badge.svg?branch=master)](https://github.com/DrChainsaw/ONNXmutable.jl/actions)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/DrChainsaw/ONNXmutable.jl?svg=true)](https://ci.appveyor.com/project/DrChainsaw/ONNXmutable-jl)
-[![Codecov](https://codecov.io/gh/DrChainsaw/ONNXmutable.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/DrChainsaw/ONNXmutable.jl)
+[![Build status](https://github.com/DrChainsaw/ONNXNaiveNASflux.jl/workflows/CI/badge.svg?branch=master)](https://github.com/DrChainsaw/ONNXNaiveNASflux.jl/actions)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/DrChainsaw/ONNXNaiveNASflux.jl?svg=true)](https://ci.appveyor.com/project/DrChainsaw/ONNXNaiveNASflux-jl)
+[![Codecov](https://codecov.io/gh/DrChainsaw/ONNXNaiveNASflux.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/DrChainsaw/ONNXNaiveNASflux.jl)
 
 [ONNX](https://onnx.ai) import and export for [Flux](https://github.com/FluxML/Flux.jl).
 
 Models are imported as [NaiveNASflux](https://github.com/DrChainsaw/NaiveNASflux.jl) graphs, meaning that things like removing/inserting layers and pruning pre-trained models is a breeze.
 
-Model export does not require the model to have any particular format. Almost any julia function can be exported as long as the primitives are recognized by ONNXmutable. 
+Model export does not require the model to have any particular format. Almost any julia function can be exported as long as the primitives are recognized by ONNXNaiveNASflux. 
 
 ## Basic usage
 
 ```julia
-Pkg.add(url="https://github.com/DrChainsaw/ONNXmutable.jl")
+Pkg.add(url="https://github.com/DrChainsaw/ONNXNaiveNASflux.jl")
 ```
 
 Exporting is done using the `onnx` function which accepts a filename `String` or an `IO` as first argument:
@@ -37,7 +37,7 @@ Names can be attached to inputs by providing a `Pair` where the first element is
 More elaborate example with a model defined as a plain Julia function:
 
 ```julia
-using ONNXmutable, Test, Statistics
+using ONNXNaiveNASflux, Test, Statistics
 
 l1 = Conv((3,3), 2=>3, relu)
 l2 = Dense(3, 4, elu)
@@ -112,7 +112,7 @@ To map the function `myfun(args::SomeType....)` to an ONNX operation one just de
 This function typically looks something like this:
 
 ```julia
-import ONNXmutable: AbstractProbe, recursename, nextname, newfrom, add!, name
+import ONNXNaiveNASflux: AbstractProbe, recursename, nextname, newfrom, add!, name
 function myfun(probes::AbstractProbe...)
     p = probes[1] # select any probe
     optype = "MyOpType"
@@ -138,7 +138,7 @@ See [serialize.jl](src/serialize/serialize.jl) for existing operations.
 Deserialization is done by simply mapping operation types to functions in a dictionary. This allows for both easy extension as well as overwriting of existing mappings with own implementations:
 
 ```julia
-import ONNXmutable: actfuns
+import ONNXNaiveNASflux: actfuns
 
 # All inputs which are not output from another node in the graph are provided in the method call
 actfuns[:SomeOp] = (params, α, β) -> x -> x^α + β
@@ -147,9 +147,9 @@ actfuns[:AnotherOp] = function(params)
     α = get(params, :alpha, 1)
     return x -> α / x
 end
-ONNXmutable.refresh()
+ONNXNaiveNASflux.refresh()
 ```
-Note: After adding/changing an operation mapping one needs to call `ONNXmutable.refresh()` for it to take effect.
+Note: After adding/changing an operation mapping one needs to call `ONNXNaiveNASflux.refresh()` for it to take effect.
 See [ops.jl](src/deserialize/ops.jl) for existing operations.
 
 

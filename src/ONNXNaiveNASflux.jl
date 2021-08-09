@@ -1,4 +1,4 @@
-module ONNXmutable
+module ONNXNaiveNASflux
 
 include("baseonnx/BaseOnnx.jl")
 
