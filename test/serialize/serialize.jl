@@ -686,7 +686,7 @@
             ortout, = onnxruntime_infer(g_org, indata)
             expout_s = hcat(expout...)
 
-            @test size.(expout_s) == size.(ortout)
+            @test size(expout_s) == size(ortout)
             @test expout_s ≈ ortout
         end
 
