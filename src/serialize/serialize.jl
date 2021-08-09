@@ -1,23 +1,23 @@
 
 """
-    onnx(filename::AbstractString, f, args...; kwargs...)
-    onnx(io::IO, f, args...; kwargs...)
+    save(filename::AbstractString, f, args...; kwargs...)
+    save(io::IO, f, args...; kwargs...)
 
 Serialize the result of `modelproto(f, args...; kwargs...)` to a file with path `filename` or to `io`.
 
 See [`modelproto`](@ref) for description of arguments.
 """
-onnx(filename::AbstractString, f, args...; modelname=filename, kwargs...) = onnx(filename, modelproto(f, args...; modelname=modelname, kwargs...))
-onnx(io::IO, f, args...; kwargs...) = onnx(io, modelproto(f, args...; kwargs...))
+save(filename::AbstractString, f, args...; modelname=filename, kwargs...) = save(filename, modelproto(f, args...; modelname=modelname, kwargs...))
+save(io::IO, f, args...; kwargs...) = save(io, modelproto(f, args...; kwargs...))
 
 """
-    onnx(filename::AbstractString, mp::ONNX.ModelProto)
-    onnx(io::IO, mp::ONNX.ModelProto)
+    save(filename::AbstractString, mp::ONNX.ModelProto)
+    save(io::IO, mp::ONNX.ModelProto)
 
 Serialize the given [`ONNX.ModelProto`](@ref) to a file with path `filename` or to `io`.
 """
-onnx(filename::AbstractString, mp::ONNX.ModelProto) = open(io -> onnx(io, mp), filename, "w")
-onnx(io::IO, mp::ONNX.ModelProto) = ONNX.writeproto(io, mp)
+save(filename::AbstractString, mp::ONNX.ModelProto) = open(io -> save(io, mp), filename, "w")
+save(io::IO, mp::ONNX.ModelProto) = ONNX.writeproto(io, mp)
 
 
 """

@@ -15,16 +15,10 @@ NaiveNASlib.name(n::ONNX.NodeProto) = n.name
 NaiveNASlib.name(vip::ONNX.ValueInfoProto) = vip.name
 NaiveNASlib.name(tp::ONNX.TensorProto) = tp.name
 
-"""
-   CompGraph(filename::String, insizes...)
-
-Return a [`CompGraph`](@ref) loaded from the given file.
-
-Argument insizes and be either size tuples or name => tuple pairs indicating the size for each model input.
-"""
-NaiveNASlib.CompGraph(filename::String, insizes...; vfun = create_vertex_default) = open(io -> CompGraph(io, insizes...; vfun), filename)
-NaiveNASlib.CompGraph(io::IO, insizes...; vfun = create_vertex_default) = CompGraph(extract(io), insizes...; vfun)
-NaiveNASlib.CompGraph(m::ONNX.ModelProto, insizes...; vfun = create_vertex_default) = CompGraph(m.graph, insizes...; vfun)
+load(filename::String, insizes...; vfun = create_vertex_default) = open(io -> load(io, insizes...; vfun), filename)
+load(io::IO, insizes...; vfun = create_vertex_default) = load(extract(io), insizes...; vfun)
+load(m::ONNX.ModelProto, insizes...; vfun = create_vertex_default) = load(m.graph, insizes...; vfun)
+load(g::ONNX.GraphProto, insizes...; vfun = create_vertex_default) = CompGraph(g, insizes...; vfun)
 NaiveNASlib.CompGraph(g::ONNX.GraphProto, insizes...; vfun = create_vertex_default) = CompGraph(CompGraphBuilder(g, insizes...); vfun)
 function NaiveNASlib.CompGraph(gb::CompGraphBuilder; vfun = create_vertex_default)
    outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(gb.g.output), gb), vfun)

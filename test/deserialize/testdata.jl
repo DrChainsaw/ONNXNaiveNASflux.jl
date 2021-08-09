@@ -1,6 +1,7 @@
 using Pkg.Artifacts
 import ONNXNaiveNASflux.BaseOnnx: readproto, TensorProto
 import ONNXNaiveNASflux:  CompGraphBuilder, extract
+using Downloads
 
 const last_dl_time = Dict()
 

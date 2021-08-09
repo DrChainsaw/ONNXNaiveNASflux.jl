@@ -18,10 +18,10 @@
     io = PipeBuffer()
     x_shape = (:W, :H, 2, :Batch)
     y_shape = (4, :Batch)
-    onnx(io, f, x_shape, y_shape)
+    save(io, f, x_shape, y_shape)
 
     # Deserialize as a NaiveNASflux CompGraph (or use the deserialization method from ONNX.jl)
-    g = CompGraph(io)
+    g = load(io)
 
     x = ones(Float32, 5,4,2,3)
     y = ones(Float32, 4, 3)
@@ -29,9 +29,9 @@
 
     # Serialization of CompGraphs does not require input shapes to be provided as they can be inferred.
     io = PipeBuffer()
-    onnx(io, g)
+    save(io, g)
 
-    g = CompGraph(io)
+    g = load(io)
     @test g(x,y) ≈ f(x,y)
 
     @test name.(vertices(g)) == ["data_0", "conv_0", "reducemean_0", "squeeze_0", "dense_0", "data_1", "add_0"]

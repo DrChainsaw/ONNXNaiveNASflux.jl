@@ -20,10 +20,10 @@ Exporting is done using the `onnx` function which accepts a filename `String` or
 
 ```julia
 # Save model as model.onnx where inputshapes are tuples with sizes of input.
-onnx("model.onnx", model, inputshapes...)
+save("model.onnx", model, inputshapes...)
 
 # Load model as a CompGraph
-graph = CompGraph("model.onnx", inputshapes...)
+graph = load("model.onnx", inputshapes...)
 ```
 Input shapes can be omitted in which case an attempt to infer the shapes will be made. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
 
@@ -54,10 +54,10 @@ end
 io = PipeBuffer()
 x_shape = (:W, :H, 2, :Batch)
 y_shape = (4, :Batch)
-onnx(io, f, x_shape, y_shape)
+save(io, f, x_shape, y_shape)
 
 # Deserialize as a NaiveNASflux CompGraph
-g = CompGraph(io)
+g = load(io)
 
 x = ones(Float32, 5,4,2,3)
 y = ones(Float32, 4, 3)
@@ -65,9 +65,9 @@ y = ones(Float32, 4, 3)
 
 # Serialization of CompGraphs does not require input shapes to be provided as they can be inferred.
 io = PipeBuffer()
-onnx(io, g)
+save(io, g)
 
-g = CompGraph(io)
+g = load(io)
 @test g(x,y) ≈ f(x,y)
 ```
 

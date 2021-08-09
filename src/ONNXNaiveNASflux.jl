@@ -13,7 +13,7 @@ import Pkg
 import JuMP: @variable, @constraint
 import NaiveNASflux.NaiveNASlib: compconstraint!, all_in_Δsize_graph
 
-export onnx, CompGraph
+export load, save
 
 include("shapes.jl")
 include("validate.jl")

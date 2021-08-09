@@ -10,7 +10,7 @@
 
     function serdeser(p::ONNX.ModelProto)
         iob = PipeBuffer();
-        onnx(iob, p)
+        save(iob, p)
         return ONNXNaiveNASflux.extract(iob)
     end
 
@@ -177,7 +177,7 @@
 
             ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
             res = fluxlayers[optype(ln)](ln.attribute, w, b)
-            
+
             resout = res(tc.indata)
             expout = tc.layer(tc.indata)
 
@@ -736,8 +736,8 @@
 
             function remodel(g, args...=missing)
                 pb = PipeBuffer()
-                onnx(pb, g, args...)
-                @test_logs (:warn, r"Mismatched") match_mode=:any CompGraph(pb)
+                save(pb, g, args...)
+                @test_logs (:warn, r"Mismatched") match_mode=:any load(pb)
             end
             
             @testset "Batchnorm -> Conv graph" begin
@@ -796,7 +796,7 @@
             @test length(ss["data_0"]) == 2
             @test length(ss["data_1"]) == 2
 
-            g = CompGraph(mt)
+            g = load(mt)
             g([1,2], [3,4]) == f([1,2], [3,4])
         end
 
@@ -811,7 +811,7 @@
             @test length(ss["in_0"]) == 2
             @test length(ss["in_1"]) == 2
 
-            g_new = CompGraph(mt)
+            g_new = load(mt)
             g_org([1,2], [3,4]) == g_new([1,2], [3,4])
         end
 
@@ -836,8 +836,8 @@
         using ONNXNaiveNASflux.NaiveNASflux
         function tryfile(filename, args...; kwargs...)
             try
-                onnx(filename, args...; kwargs...)
-                return CompGraph(filename)
+                save(filename, args...; kwargs...)
+                return load(filename)
             finally
                 rm(filename;force=true)
             end
@@ -897,11 +897,11 @@
     @testset "Allowed input shapes" begin
         function remodel(m, args...; assertwarn=true)
             pb = PipeBuffer()
-            onnx(pb, m, args...)
+            save(pb, m, args...)
             if assertwarn && any(ismissing, args)
-                return @test_logs (:warn, r"Mismatched") CompGraph(pb)
+                return @test_logs (:warn, r"Mismatched") load(pb)
             end
-            return CompGraph(pb)
+            return load(pb)
         end
 
         @testset "Allowed input shapes op: $(tc[1])" for tc in (

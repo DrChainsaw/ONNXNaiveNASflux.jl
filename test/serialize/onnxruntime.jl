@@ -12,7 +12,7 @@ function onnxruntime_infer(f, inputs...)
 
 	modfile = "tmpmodel.onnx"
 	try
-		onnx(modfile, f, size.(inputs)...)
+		save(modfile, f, size.(inputs)...)
 
 		ort = pyimport("onnxruntime")
 		sess = ort.InferenceSession(modfile);
