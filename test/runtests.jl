@@ -1,8 +1,8 @@
-using ONNXmutable
-import ONNXmutable: ONNX
+using ONNXNaiveNASflux
+import ONNXNaiveNASflux: ONNX
 using Test
 
-@testset "ONNXmutable.jl" begin
+@testset "ONNXNaiveNASflux.jl" begin
 
     @info "Test BaseOnnx"
     @testset "BaseOnnx" begin  

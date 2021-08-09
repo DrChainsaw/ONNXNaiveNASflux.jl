@@ -1,11 +1,11 @@
-import ONNXmutable: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
-using ONNXmutable.NaiveNASflux
+import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
+using ONNXNaiveNASflux.NaiveNASflux
 
 # Logging to avoid travis timeouts
 @info "  Test padding and sources"
 
 @testset "Read padding" begin
-    import ONNXmutable: prev
+    import ONNXNaiveNASflux: prev
 
     @test prev(2) == 2
     @test prev([1,2]) == [1,2]
@@ -29,15 +29,15 @@ end
     end
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model)
+        cg = load(model)
         res = cg()
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
-        onnx(io, cg)
-        cg = CompGraph(io)
+        save(io, cg)
+        cg = load(io)
         res = cg()
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -116,15 +116,15 @@ end
     end
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model)
+        cg = load(model)
         res = cg(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
-        onnx(io, cg)
-        cg = CompGraph(io)
+        save(io, cg)
+        cg = load(io)
         res = cg(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -213,15 +213,15 @@ end
     end
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model)
+        cg = load(model)
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
-        onnx(io, cg)
-        cg = CompGraph(io)
+        save(io, cg)
+        cg = load(io)
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -250,15 +250,15 @@ end
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) graph" begin
-        cg = CompGraph(model)
+        cg = load(model)
         res = cg(inputs[1:length(cg.inputs)]...)
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
-        onnx(io, cg)
-        cg = CompGraph(io)
+        save(io, cg)
+        cg = load(io)
         res = cg(inputs[1:length(cg.inputs)]...)
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -271,11 +271,11 @@ end
         ivs = inputvertex.(["in1", "in2"], 4, Ref(FluxDense())) 
         g_org = CompGraph(ivs, "out" >> ivs[1] + ivs[2])
         pb = PipeBuffer()
-        onnx(pb, g_org, "in1" => missing, "in2" => missing)
+        save(pb, g_org, "in1" => missing, "in2" => missing)
         return pb
     end
 
-    insize(t::Tuple) = ONNXmutable.int_size(t[NaiveNASflux.actdim(length(t))])
+    insize(t::Tuple) = ONNXNaiveNASflux.int_size(t[NaiveNASflux.actdim(length(t))])
     insize(p::Pair) = p |> last |> insize
     @testset "Input format $inshapes" for inshapes in (
         ((4,1), (4,1)),
@@ -283,17 +283,17 @@ end
         ((4,missing), (4, :B)),
         ((:I, 3), (:I, 4))
     ) 
-        g_new = CompGraph(sumgraph(), inshapes...)
+        g_new = load(sumgraph(), inshapes...)
         @test nout.(g_new.inputs) == insize.(inshapes) |> collect
         @test layertype.(g_new.inputs) == [FluxDense(), FluxDense()]
     end
 
-    inshape(t::Tuple) = t |> length |> ONNXmutable.guess_layertype
+    inshape(t::Tuple) = t |> length |> ONNXNaiveNASflux.guess_layertype
     @testset "Mixshape format $inshapes" for inshapes in (
         ((1,1,5,1), (5,1)),
         ((5,1), (1,1,5,1)),
     )
-        g_new = CompGraph(sumgraph(), inshapes...)
+        g_new = load(sumgraph(), inshapes...)
         @test nout.(g_new.inputs) == [5, 5]
         @test layertype.(g_new.inputs) == inshape.(inshapes |> collect)
     end
@@ -303,15 +303,15 @@ end
         ("in1" => (4,1), "in2" => (4,1), "in2" => (4,1)),
         ("in1" => (4,1), "notin2" => (4,1))
     )
-        @test_throws AssertionError CompGraph(sumgraph(), inshapes...)
+        @test_throws AssertionError load(sumgraph(), inshapes...)
     end
 end
 
 @testset "Deserialize with merging" begin
     function remodel(f, args...) 
         pb = PipeBuffer()
-        onnx(pb, f, args...)
-        return CompGraph(pb, args...)
+        save(pb, f, args...)
+        return load(pb, args...)
     end
 
 
@@ -322,8 +322,8 @@ end
     end
 
     @testset "Merge Reshape and $gp" for gp in (
-        ONNXmutable.globalmeanpool,
-        ONNXmutable.globalmaxpool
+        ONNXNaiveNASflux.globalmeanpool,
+        ONNXNaiveNASflux.globalmaxpool
     ) 
         m = remodel(Chain(
             Conv((3,3), 3 => 3),

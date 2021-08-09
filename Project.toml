@@ -1,5 +1,5 @@
-name = "ONNXmutable"
-uuid = "cf2a63a0-f8ae-421c-82b7-306ecfceaf66"
+name = "ONNXNaiveNASflux"
+uuid = "2e935253-ba83-4645-9154-13ffeb13a688"
 authors = ["DrChainsaw"]
 version = "0.1.0"
 

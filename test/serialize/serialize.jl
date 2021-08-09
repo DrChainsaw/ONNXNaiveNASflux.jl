@@ -1,6 +1,6 @@
 
 @testset "Structure" begin
-    import ONNXmutable: OnnxNode, input, output, optype, array
+    import ONNXNaiveNASflux: OnnxNode, input, output, optype, array
 
     function serdeser(p::T, convfun = cfun(p)) where T
         iob = PipeBuffer();
@@ -10,8 +10,8 @@
 
     function serdeser(p::ONNX.ModelProto)
         iob = PipeBuffer();
-        onnx(iob, p)
-        return ONNXmutable.extract(iob)
+        save(iob, p)
+        return ONNXNaiveNASflux.extract(iob)
     end
 
     cfun(::ONNX.NodeProto) = np -> OnnxNode(np, ONNX.TensorProto[])
@@ -22,10 +22,10 @@
 
     @testset "Nodes" begin
         using Statistics
-        import ONNXmutable: optype, actfuns, fluxlayers, invariantops
-        using ONNXmutable.NaiveNASflux
-        import ONNXmutable.NaiveNASflux: weights, bias
-        import ONNXmutable: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape
+        import ONNXNaiveNASflux: optype, actfuns, fluxlayers, invariantops
+        using ONNXNaiveNASflux.NaiveNASflux
+        import ONNXNaiveNASflux.NaiveNASflux: weights, bias
+        import ONNXNaiveNASflux: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape
         struct NodeProbe{F, S} <: AbstractProbe
             name::String
             namefun::F
@@ -33,12 +33,12 @@
             protos::Vector{Any}
         end
         NodeProbe(name, namefun, shape=missing) = NodeProbe(name, namefun, shape, [])
-        ONNXmutable.add!(p::NodeProbe, n) = push!(p.protos, n)
-        ONNXmutable.nextname(p::NodeProbe) = p.namefun
-        ONNXmutable.newfrom(p::NodeProbe, pname, Δshape=identity) = NodeProbe(pname, p.namefun, nextshape(p, Δshape), p.protos)
-        ONNXmutable.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.shape, p.protos)
-        ONNXmutable.name(p::NodeProbe) = p.name
-        ONNXmutable.shape(p::NodeProbe) = p.shape
+        ONNXNaiveNASflux.add!(p::NodeProbe, n) = push!(p.protos, n)
+        ONNXNaiveNASflux.nextname(p::NodeProbe) = p.namefun
+        ONNXNaiveNASflux.newfrom(p::NodeProbe, pname, Δshape=identity) = NodeProbe(pname, p.namefun, nextshape(p, Δshape), p.protos)
+        ONNXNaiveNASflux.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.shape, p.protos)
+        ONNXNaiveNASflux.name(p::NodeProbe) = p.name
+        ONNXNaiveNASflux.shape(p::NodeProbe) = p.shape
 
         @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
             (op=:Relu, attr = Dict(), fd=actfuns),
@@ -67,7 +67,7 @@
 
             mexprev(v, x) = x
             mexprev(v, x::Tuple) = reverse(x)
-            mexprev(::Val{:pads}, x::Tuple) = ONNXmutable.padexpand(Val(length(x)), x)
+            mexprev(::Val{:pads}, x::Tuple) = ONNXNaiveNASflux.padexpand(Val(length(x)), x)
             for (k,v) in tc.attr
                 for (exp, act) in zip(mexprev(Val(k), v), res.attribute[k])
                     @test exp == act
@@ -93,7 +93,7 @@
             @test optype(res) == tc.ot
             @test name(res) == name(outprobe)
             expdims = tc.dims isa Tuple ? collect(tc.dims) : tc.dims
-            @test ONNXmutable.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
+            @test ONNXNaiveNASflux.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
         end
 
         @testset "Reshape" begin
@@ -118,7 +118,7 @@
         end
 
         @testset "Flatten" begin
-            import ONNXmutable.NaiveNASflux.Flux: flatten
+            import ONNXNaiveNASflux.NaiveNASflux.Flux: flatten
             inprobe = NodeProbe("input", f -> "output", (2, 3, 5))
 
             outprobe = Flux.flatten(inprobe)
@@ -134,13 +134,13 @@
             @test name(res) == name(outprobe)
             @test res.attribute[:axis] == -2
 
-            op = ONNXmutable.pseudotransparentops[optype(res)](res.attribute)
+            op = ONNXNaiveNASflux.pseudotransparentops[optype(res)](res.attribute)
             indata = reshape(collect(1:2*3*5), 2,3,5)
             @test op(indata) == flatten(indata)
         end
 
         @testset "Pad expand" begin
-            import ONNXmutable: padexpand
+            import ONNXNaiveNASflux: padexpand
             @test padexpand(Val(1), (1,)) == [1,1]
             @test padexpand(Val(2), (1,2)) == [2,1,2,1]
             @test padexpand(Val(3), (1,2,3)) == [3,2,1,3,2,1]
@@ -172,13 +172,11 @@
             @test size(w) == size(weights(tc.layer))
             @test size(b) == size(bias(tc.layer))
 
-            @test w ≈ ONNXmutable.flipweights(layertype(tc.layer), weights(tc.layer))
+            @test w ≈ ONNXNaiveNASflux.flipweights(layertype(tc.layer), weights(tc.layer))
             @test b ≈ bias(tc.layer)
 
             ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
             res = fluxlayers[optype(ln)](ln.attribute, w, b)
-
-            @test string(res) == string(tc.layer)
 
             resout = res(tc.indata)
             expout = tc.layer(tc.indata)
@@ -208,7 +206,7 @@
             w = serdeser(wp)
 
             @test size(w) == size(weights(tc.layer))
-            @test w ≈ ONNXmutable.flipweights(layertype(tc.layer), weights(tc.layer))
+            @test w ≈ ONNXNaiveNASflux.flipweights(layertype(tc.layer), weights(tc.layer))
 
             res = fluxlayers[optype(ln)](ln.attribute, w)
 
@@ -227,7 +225,7 @@
             (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
             (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
             )
-            import ONNXmutable.NaiveNASflux: hiddenweights
+            import ONNXNaiveNASflux.NaiveNASflux: hiddenweights
 
             inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
@@ -304,8 +302,8 @@
     end
 
     @testset "Graphs" begin
-        using ONNXmutable.NaiveNASflux
-        import ONNXmutable: graphproto, modelproto, validate
+        using ONNXNaiveNASflux.NaiveNASflux
+        import ONNXNaiveNASflux: graphproto, modelproto, validate
 
         dense(name, inpt::AbstractVertex, outsize, actfun=identity) = mutable(name, Dense(nout(inpt), outsize, actfun), inpt)
         dense(inpt::AbstractVertex, outsize, actfun=identity) = mutable(Dense(nout(inpt), outsize, actfun), inpt)
@@ -349,7 +347,7 @@
             test_outputs(resout, expout)
 
             # For FLux recurrent layers as they accept 2D input but ONNX wants 3D input
-            sizediff = length(ONNXmutable.shape(g_new.inputs[])) - ndims(indata)
+            sizediff = length(ONNXNaiveNASflux.shape(g_new.inputs[])) - ndims(indata)
             indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
 
             ortout = onnxruntime_infer(g_org, indata)
@@ -450,7 +448,7 @@
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv1", v0, 4, relu)
             v2 = convvertex("conv2", v1, 5, elu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
             v4 = dense("output", v3, 2)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
@@ -459,7 +457,7 @@
         @testset "Linear Conv graph with global pooling without names" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("", v0, 4, relu)
-            v2 = invariantvertex(x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))), v1)
+            v2 = invariantvertex(x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))), v1)
 
             g_org = CompGraph(v0, v2)
 
@@ -480,7 +478,7 @@
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv", v0, 4, relu)
             v2 = bnvertex("batchnorm", v1, elu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
             v4 = dense("output", v3, 2, selu)
 
             test_named_graph(CompGraph(v0, v4), (4,6))
@@ -490,7 +488,7 @@
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = mpvertex("maxpool", v0)
             v2 = convvertex("conv", v1, 4, relu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
             v4 = dense("output", v3, 2, selu)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
@@ -526,7 +524,7 @@
         end
 
         @testset "Dense graph with add and layerfun" begin
-            import ONNXmutable: create_vertex_default
+            import ONNXNaiveNASflux: create_vertex_default
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense(v0, 4, relu)
             v2 = dense(v0, 4)
@@ -618,7 +616,7 @@
         end
 
         @testset "Dense graph with free constant" begin
-            import ONNXmutable: sourcevertex_with_outputs
+            import ONNXNaiveNASflux: sourcevertex_with_outputs
             v0 = inputvertex("input", 3, FluxDense())
             v1 = dense("dense", v0, 2, elu)
             # Constant must be array for generic check to pass as ONNX opset only supports constant tensors
@@ -633,7 +631,7 @@
             v1 = convvertex("conv", v0, 2, elu)
             v2 = bnvertex("batchnorm", v0)
             v3 = concat("conc", v1, v2)
-            v4 = fvertex("globmeanpool", v3, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v4 = fvertex("globmeanpool", v3, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
             v5 = dense("output", v4, 2, relu)
 
             test_named_graph(CompGraph(v0, v5), (2,3))
@@ -688,7 +686,7 @@
             ortout, = onnxruntime_infer(g_org, indata)
             expout_s = hcat(expout...)
 
-            @test size.(expout_s) == size.(ortout)
+            @test size(expout_s) == size(ortout)
             @test expout_s ≈ ortout
         end
 
@@ -710,7 +708,7 @@
         @testset "Conv to reshape to Dense" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv", v0, 4, relu)
-            v2 = absorbvertex(ONNXmutable.Reshape((12, Colon())), 12, v1, traitdecoration = t -> NamedTrait(t, "reshape"))
+            v2 = absorbvertex(ONNXNaiveNASflux.Reshape((12, Colon())), 12, v1, traitdecoration = t -> NamedTrait(t, "reshape"))
             v3 = dense("dense", v2, 3, elu)
 
             test_named_graph(CompGraph(v0, v3), (2,3))
@@ -719,7 +717,7 @@
         @testset "Conv to Flatten to Dense" begin
             v0 = inputvertex("input", 3, FluxConv{2}())
             v1 = convvertex("conv", v0, 4, relu)
-            v2 = absorbvertex(ONNXmutable.Flatten(3), 24, v1, traitdecoration = t -> NamedTrait(t, "flatten"))
+            v2 = absorbvertex(ONNXNaiveNASflux.Flatten(3), 24, v1, traitdecoration = t -> NamedTrait(t, "flatten"))
             v3 = dense("dense", v2, 3, elu)
 
             test_named_graph(CompGraph(v0, v3), (2,3))
@@ -738,8 +736,8 @@
 
             function remodel(g, args...=missing)
                 pb = PipeBuffer()
-                onnx(pb, g, args...)
-                @test_logs (:warn, r"Mismatched") match_mode=:any CompGraph(pb)
+                save(pb, g, args...)
+                @test_logs (:warn, r"Mismatched") match_mode=:any load(pb)
             end
             
             @testset "Batchnorm -> Conv graph" begin
@@ -774,7 +772,7 @@
                 v0 = inputvertex("input", 3, FluxConv{2}())    
                 v1 = convvertex("v1", v0, 2)
                 v2 = concat("v2", v1, v0)
-                v3 = fvertex("v3", v2, x -> ONNXmutable.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+                v3 = fvertex("v3", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
                 v4 = dense("v4", v3, 4)
 
                 g = remodel(CompGraph(v0, v4))
@@ -784,7 +782,7 @@
     end
 
     @testset "Models" begin
-        import ONNXmutable: modelproto, sizes
+        import ONNXNaiveNASflux: modelproto, sizes
 
         @testset "Generic function infer" begin
             _f(x, y) = x .+ y
@@ -798,7 +796,7 @@
             @test length(ss["data_0"]) == 2
             @test length(ss["data_1"]) == 2
 
-            g = CompGraph(mt)
+            g = load(mt)
             g([1,2], [3,4]) == f([1,2], [3,4])
         end
 
@@ -813,7 +811,7 @@
             @test length(ss["in_0"]) == 2
             @test length(ss["in_1"]) == 2
 
-            g_new = CompGraph(mt)
+            g_new = load(mt)
             g_org([1,2], [3,4]) == g_new([1,2], [3,4])
         end
 
@@ -835,11 +833,11 @@
     end
 
     @testset "Save to file" begin
-        using ONNXmutable.NaiveNASflux
+        using ONNXNaiveNASflux.NaiveNASflux
         function tryfile(filename, args...; kwargs...)
             try
-                onnx(filename, args...; kwargs...)
-                return CompGraph(filename)
+                save(filename, args...; kwargs...)
+                return load(filename)
             finally
                 rm(filename;force=true)
             end
@@ -881,7 +879,7 @@
             v2 = mutable("bn", BatchNorm(4, elu), v1)
             g_org = CompGraph(v0, v2)
 
-            ng = ONNXmutable.name_runningnr()
+            ng = ONNXNaiveNASflux.name_runningnr()
             ns(::MutationVertex) = n -> ng
             ns(n) = ng(n)
 
@@ -899,11 +897,11 @@
     @testset "Allowed input shapes" begin
         function remodel(m, args...; assertwarn=true)
             pb = PipeBuffer()
-            onnx(pb, m, args...)
+            save(pb, m, args...)
             if assertwarn && any(ismissing, args)
-                return @test_logs (:warn, r"Mismatched") CompGraph(pb)
+                return @test_logs (:warn, r"Mismatched") load(pb)
             end
-            return CompGraph(pb)
+            return load(pb)
         end
 
         @testset "Allowed input shapes op: $(tc[1])" for tc in (

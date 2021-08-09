@@ -1,23 +1,23 @@
 
 """
-    onnx(filename::AbstractString, f, args...; kwargs...)
-    onnx(io::IO, f, args...; kwargs...)
+    save(filename::AbstractString, f, args...; kwargs...)
+    save(io::IO, f, args...; kwargs...)
 
 Serialize the result of `modelproto(f, args...; kwargs...)` to a file with path `filename` or to `io`.
 
 See [`modelproto`](@ref) for description of arguments.
 """
-onnx(filename::AbstractString, f, args...; modelname=filename, kwargs...) = onnx(filename, modelproto(f, args...; modelname=modelname, kwargs...))
-onnx(io::IO, f, args...; kwargs...) = onnx(io, modelproto(f, args...; kwargs...))
+save(filename::AbstractString, f, args...; modelname=filename, kwargs...) = save(filename, modelproto(f, args...; modelname=modelname, kwargs...))
+save(io::IO, f, args...; kwargs...) = save(io, modelproto(f, args...; kwargs...))
 
 """
-    onnx(filename::AbstractString, mp::ONNX.ModelProto)
-    onnx(io::IO, mp::ONNX.ModelProto)
+    save(filename::AbstractString, mp::ONNX.ModelProto)
+    save(io::IO, mp::ONNX.ModelProto)
 
 Serialize the given [`ONNX.ModelProto`](@ref) to a file with path `filename` or to `io`.
 """
-onnx(filename::AbstractString, mp::ONNX.ModelProto) = open(io -> onnx(io, mp), filename, "w")
-onnx(io::IO, mp::ONNX.ModelProto) = ONNX.writeproto(io, mp)
+save(filename::AbstractString, mp::ONNX.ModelProto) = open(io -> save(io, mp), filename, "w")
+save(io::IO, mp::ONNX.ModelProto) = ONNX.writeproto(io, mp)
 
 
 """
@@ -92,7 +92,7 @@ infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
 modelproto(;kwargs...) = ONNX.ModelProto(;
     ir_version=6,
     opset_import=[ONNX.OperatorSetIdProto(version=11)],
-    producer_name="ONNXmutable.jl",
+    producer_name="ONNXNaiveNASflux.jl",
     producer_version=string(Pkg.Types.Context().env.project.version), # TODO: Ugh....
     kwargs...)
 
@@ -429,7 +429,7 @@ argpermswith(t, n::Integer, args...) = (a for a in argpermutations(n, t, args...
 
 function gen_broadcastable_elemwise(f, optype, n=2)
     fs = Symbol(f)
-    fm = which(ONNXmutable, fs)
+    fm = which(ONNXNaiveNASflux, fs)
     generate_elemwise(fm, fs, optype, argpermswith(AbstractProbe, n, nothing))
     override_broadcast(f, argpermswith(Base.RefValue{<:AbstractProbe}, n, AbstractArray))
 end

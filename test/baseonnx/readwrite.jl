@@ -1,5 +1,5 @@
 @testset "Read and write" begin
-    import ONNXmutable.BaseOnnx
+    import ONNXNaiveNASflux.BaseOnnx
 
     function serdeser(p::T) where T
         iob = PipeBuffer();

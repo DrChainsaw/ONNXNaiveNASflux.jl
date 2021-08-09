@@ -1,13 +1,13 @@
 
 @testset "Constraints" begin
-    using ONNXmutable.NaiveNASflux
-    import ONNXmutable: SizePseudoTransparent
+    using ONNXNaiveNASflux.NaiveNASflux
+    import ONNXNaiveNASflux: SizePseudoTransparent
 
     dv(name, invertex, outsize) = mutable(name, Dense(nout(invertex), outsize), invertex)
     cv(name, invertex, outsize) = mutable(name, Conv((3,3), nout(invertex) => outsize, pad=(1,1)), invertex)
 
     @testset "Reshape" begin
-        import ONNXmutable: Reshape
+        import ONNXNaiveNASflux: Reshape
 
         rv(name, invertex, outsize, dims) = absorbvertex(Reshape(dims), outsize, invertex; traitdecoration=t -> NamedTrait(SizePseudoTransparent(t), name))
 
@@ -203,7 +203,7 @@
 
 
     @testset "Flatten" begin
-        import ONNXmutable: Flatten
+        import ONNXNaiveNASflux: Flatten
         fv(name, invertex, outsize, dim) = absorbvertex(Flatten(dim), outsize, invertex; traitdecoration=t -> NamedTrait(SizePseudoTransparent(t), name))
 
         function tg(outsize, dim)
