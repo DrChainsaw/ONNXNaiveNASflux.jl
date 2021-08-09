@@ -7,7 +7,7 @@ function onnxruntime_infer(f, inputs...)
 	if "onnxruntime" ∉ Conda._installed_packages() || Conda._installed_packages_dict()["onnxruntime"][1] !== v"1.8.1"
 		# TODO: Add some kind of warning if an incompatible default python installation is used due to ENV["PYTHON"] not being set to ""
 		Conda.pip_interop(true)
-		Conda.pip("install --no-warn-script-location --user", "onnxruntime==1.8.1")
+		Conda.pip("install --no-warn-script-location", "onnxruntime==1.8.1")
 	end
 
 	modfile = "tmpmodel.onnx"
