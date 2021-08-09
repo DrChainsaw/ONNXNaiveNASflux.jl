@@ -4,14 +4,18 @@ include("baseonnx/BaseOnnx.jl")
 
 import .BaseOnnx: array
 const ONNX = BaseOnnx
+using Flux
 using NaiveNASflux
-import NaiveNASflux: weights, bias
-import NaiveNASflux: indim, outdim, actdim, actrank
+using NaiveNASflux: weights, bias
+using NaiveNASflux: indim, outdim, actdim, actrank, layertype
+using NaiveNASflux: FluxLayer, FluxParLayer, FluxNoParLayer, FluxDense, FluxConvolutional, FluxConv, FluxBatchNorm, 
+                    FluxRecurrent, FluxRnn, FluxLstm, FluxGru, FluxTransparentLayer
 using Setfield
 using Statistics
 import Pkg
 import JuMP: @variable, @constraint
-import NaiveNASflux.NaiveNASlib: compconstraint!, all_in_Δsize_graph
+using NaiveNASlib.Extend, NaiveNASlib.Advanced
+using NaiveNASlib: compconstraint!, all_in_Δsize_graph, NamedTrait, VertexConf
 
 export load, save
 

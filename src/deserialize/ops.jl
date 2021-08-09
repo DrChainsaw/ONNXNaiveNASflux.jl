@@ -263,7 +263,7 @@ function elemwisevertex(name, inputs, params, op, id; traitdecoration=identity, 
     c = length(c) == 1 ? c[] : c
     let cc = c
         opp, wrap = cc == id ? (op, layerfun) : (identity, f -> layerfun((x...) -> op.(cc, x...)))
-        conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = wrap, kwargs...)
+        conf = VertexConf(traitdecoration = named(name) ∘ traitdecoration, outwrap = wrap, kwargs...)
         return NaiveNASlib.elemwise(opp, conf, inputs...)
     end
 end
@@ -271,7 +271,7 @@ end
 
 verts[:Concat] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
     dims = numpy2fluxdim(params[:axis], inputs[1])
-    return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap=layerfun, kwargs...)
+    return conc(inputs..., dims=dims, traitdecoration = named(name) ∘ traitdecoration, outwrap=layerfun, kwargs...)
 end
 
 
@@ -292,18 +292,17 @@ function refresh()
     end
 
     for (s, f) in fluxlayers
-        verts[s] = (name, inputs, args...;kwargs...) -> mutable(name, f(args...), inputs...; kwargs...)
+        verts[s] = (name, inputs, args...;kwargs...) -> fluxvertex(name, f(args...), inputs...; kwargs...)
     end
 
     for (s, f) in invariantops
-        verts[s] = (name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...) -> invariantvertex(layerfun(f(args...)), inputs...; traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
+        verts[s] = (name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...) -> invariantvertex(layerfun(f(args...)), inputs...; traitdecoration = named(name) ∘ traitdecoration, kwargs...)
     end
 
     for (s,f) in pseudotransparentops
         verts[s] = function(name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...)
             comp = f(args...)
-            outsize = calc_outsize(comp, inputs...)
-            return absorbvertex(layerfun(comp), outsize, inputs...; traitdecoration = t -> NamedTrait(traitdecoration(SizePseudoTransparent(t)), name), kwargs...)
+            return absorbvertex(layerfun(comp), inputs...; traitdecoration = named(name) ∘ traitdecoration ∘ SizePseudoTransparent, kwargs...)
         end
     end
 

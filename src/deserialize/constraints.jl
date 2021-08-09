@@ -10,6 +10,12 @@ NaiveNASlib.base(t::SizePseudoTransparent) = t.base
 
 NaiveNASlib.all_in_Δsize_graph(::SizePseudoTransparent, d, v, visited) = all_in_Δsize_graph(SizeInvariant(), d, v, visited)
 
+NaiveNASlib.nout(::SizePseudoTransparent, v::AbstractVertex) = calc_outsize(v)
+NaiveNASlib.nin(::SizePseudoTransparent, v::AbstractVertex) = nin(SizeInvariant(), v)
+
+calc_outsize(v::AbstractVertex, vo::AbstractVertex=v) = calc_outsize(base(v), vo)
+calc_outsize(v::CompVertex, vo::AbstractVertex) = calc_outsize(v.computation, vo)
+
 """
     reshape_keepshape(x, shape)
 
@@ -47,7 +53,15 @@ Reshape(dims; activation_dim=actdim(guess_layertype(length(dims)))) = Reshape(ac
 
 (r::Reshape)(x) = any(==(0), r.dims) ? reshape_keepshape(x, r.dims) : reshape(x, r.dims)
 
-function calc_outsize(r::Reshape, invertex)
+function calc_outsize(r::Reshape, v)
+    # TODO: Remove! Will SO if next vertex is transparent!
+    for vo in outputs(v)
+        for (voi, nini) in zip(inputs(vo), nin(vo))
+            voi === v && return nini
+        end
+    end
+
+    invertex = first(inputs(v))
     outshape = r.dims[r.adim]
     outshape == 0 && return nout(invertex)
     outshape isa Integer && return outshape
@@ -56,20 +70,13 @@ function calc_outsize(r::Reshape, invertex)
 end
 
 
-function NaiveNASlib.mutate_inputs(r::Reshape, ins) end
-function NaiveNASlib.mutate_outputs(r::Reshape{<:Tuple}, outs)
+function NaiveNASlib.Δsize!(r::Reshape{<:Tuple}, ins::AbstractArray, outs::AbstractArray)
     r.dims = Tuple(map(enumerate(r.dims)) do (i, s)
         s isa Colon && return s
         i == r.adim && return length(outs)
         return s
     end)
 end
-
-function NaiveNASlib.minΔninfactor(r::Reshape)
-    valdims = filter(dim -> dim isa Integer && dim != 0, collect(r.dims))
-    return isempty(valdims) ? 1 : minimum(valdims)
-end
-NaiveNASlib.minΔnoutfactor(r::Reshape) = minΔninfactor(r)
 
 NaiveNASflux.layer(r::Reshape) = r
 NaiveNASflux.actdim(r::Reshape) = r.adim
@@ -170,17 +177,19 @@ function flatten(x, dim)
     return reshape(x, prod(xs[1:absdim]), prod(xs[absdim+1:end]))
 end
 
-function NaiveNASlib.mutate_inputs(f::Flatten, ins) end
-function NaiveNASlib.mutate_outputs(f::Flatten, outs) end
-
-NaiveNASlib.minΔninfactor(f::Flatten) = 1
-NaiveNASlib.minΔnoutfactor(f::Flatten) = 1
-
 NaiveNASflux.layer(f::Flatten) = f
 NaiveNASflux.actdim(f::Flatten) = 1
 NaiveNASflux.actrank(f::Flatten) = 1
 
-calc_outsize(f::Flatten, invertex) = 0 # Must be set later...
+function calc_outsize(::Flatten, v) 
+    # TODO: Remove! Will SO if next vertex is transparent!
+    for vo in outputs(v)
+        for (voi, nini) in zip(inputs(vo), nin(vo))
+            voi === v && return nini
+        end
+    end 
+    return 0 #We don't know yet...
+end
 
 function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, f::Flatten, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))

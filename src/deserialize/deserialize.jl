@@ -76,7 +76,7 @@ function findinsize(lt, v, in_index, gb)
     fix_zerosizes!(inputs(v)[in_index], gb)
     return nout(inputs(v)[in_index])
 end
-findinsize(::FluxParLayer, v, in_index, gb) = nin(layer(v))
+findinsize(::FluxParLayer, v, in_index, gb) = nin(layer(v))[]
 
 
 """
