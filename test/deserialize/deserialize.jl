@@ -266,7 +266,7 @@ end
 end
 
 @testset "Deserialize with inputs" begin
-    using NaiveNASflux: FluxDense, layertype
+    using NaiveNASflux: GenericFlux2D, layertype
 
     function sumgraph()
         ivs = denseinputvertex.(["in1", "in2"], 4) 
@@ -291,7 +291,7 @@ end
             load(sumgraph(), inshapes...)
         end
         @test nout.(g_new.inputs) == expsizes
-        @test layertype.(g_new.inputs) == [FluxDense(), FluxDense()]
+        @test layertype.(g_new.inputs) == [GenericFlux2D(), GenericFlux2D()]
     end
 
     inshape(t::Tuple) = t |> length |> ONNXNaiveNASflux.guess_layertype

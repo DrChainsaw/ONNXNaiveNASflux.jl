@@ -91,7 +91,7 @@ function find_valid_fluxlayertype(n::OnnxNode, gb, seen=[])
    push!(seen, n)
 
    lt = fluxlayertypes[optype(n)](n.params...)
-   lt isa FluxParLayer && return [lt]
+   lt isa FluxParLayer && return [generic(lt)]
    stop_search(optype(n)) && return []
 
    return mapreduce(vcat, vcat(outnames(n, gb), innames(n)); init=[]) do outname
@@ -99,6 +99,11 @@ function find_valid_fluxlayertype(n::OnnxNode, gb, seen=[])
       find_valid_fluxlayertype(outnode, gb, seen)
    end
 end
+
+generic(::FluxConvolutional{N}) where N = GenericFluxConvolutional{N}()
+generic(::Flux2D) = GenericFlux2D()
+generic(::FluxRecurrent) = GenericFluxRecurrent()
+generic(lt) = lt
 
 stop_search(lt) = false
 stop_search(ot::Symbol) = stop_search(Val{ot})

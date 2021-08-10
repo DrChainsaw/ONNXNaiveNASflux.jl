@@ -21,7 +21,7 @@ function shape(v::AbstractVertex)
 end
 shape(::FluxLayer, outsize) = missing
 shape(::Shape1D, outsize) = (outsize,)
-shape(::FluxDense, outsize) = (outsize, missing)
+shape(::Flux2D, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
 shape(::FluxRecurrent, outsize) = (outsize, missing, missing)
 
@@ -33,9 +33,9 @@ rmdims(t::Tuple, dims) = Tuple(t[i] for i in 1:length(t) if i ∉ dims)
 
 function guess_layertype(ndims::Integer)
     ndims <= 1 && return Shape1D()
-    ndims == 2 && return FluxDense()
-    ndims == 3 && return FluxRnn()
-    return FluxConv{ndims-2}()
+    ndims == 2 && return GenericFlux2D()
+    ndims == 3 && return GenericFluxRecurrent()
+    return GenericFluxConvolutional{ndims-2}()
 end
 
 flipweights(l, w) = w
@@ -62,7 +62,7 @@ outshape(l, s) = outshape(layertype(l), l, s)
 outshape(::FluxParLayer, l, ::Missing) = outshape(l, shape(layertype(l), nin(l)[])) 
 outshape(lt, l, ::Missing) = missing
 
-function outshape(::FluxDense, l, s::Tuple) 
+function outshape(::Flux2D, l, s::Tuple) 
     assertshape(s, 2, l)
     assertsize(s[1], nin(l)[], l)
     return (nout(l), s[end])

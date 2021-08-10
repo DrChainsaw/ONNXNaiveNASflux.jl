@@ -3,7 +3,7 @@ struct MeasureNout{T} <: NaiveNASflux.AbstractMutableComp
     actdim::Int
     outsize::Ref{Int}
 end
-MeasureNout(l, actdim=actdim(l)) = MeasureNout(l, actdim, Ref(0))
+MeasureNout(l; actdim=actdim(l), outsize=0) = MeasureNout(l, actdim, Ref(outsize))
 NaiveNASflux.wrapped(mn::MeasureNout) = mn.wrapped
 NaiveNASflux.layer(mn::MeasureNout) = layer(mn.wrapped)
 
@@ -33,10 +33,14 @@ end
 function try_infer_sizes!(g, insizes...)
     all(v -> nout(v) > 0, vertices(g)) && return
     try
-        insizes_nobatch = map(s -> s[1:end-1], insizes)
+        insizes_nobatch = map(zip(insizes, layertype.(inputs(g)))) do (insize, lt)
+            # not sure this can happen...
+            lt isa FluxRecurrent && length(insize) == 3 && return insize[1:end-2]
+            insize[1:end-1]
+        end
         if length(insizes) === length(inputs(g)) && all(inshape -> all(s -> s isa Number && s > 0, inshape), insizes_nobatch) 
             # This will make any MeasureNout to become aware of the size
-            Flux.outputsize(g,insizes_nobatch; padbatch=true)
+            Flux.outputsize(g,insizes_nobatch...; padbatch=true)
         else
             @warn  "No valid input sizes provided. Shape inference could not be done. Either provide Integer insizes manually or use load(...; infer_shapes=false) to disable. If disabled, graph mutation might not work."
         end
