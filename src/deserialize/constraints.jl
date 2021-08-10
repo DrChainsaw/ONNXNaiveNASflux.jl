@@ -7,8 +7,7 @@ struct SizePseudoTransparent <: NaiveNASlib.DecoratingTrait
 end
 NaiveNASlib.base(t::SizePseudoTransparent) = t.base
 
-
-NaiveNASlib.all_in_Δsize_graph(::SizePseudoTransparent, d, v, visited) = all_in_Δsize_graph(SizeInvariant(), d, v, visited)
+NaiveNASlib.all_in_Δsize_graph(mode, ::SizePseudoTransparent, args...) = NaiveNASlib.all_in_Δsize_graph(mode, SizeInvariant(), args...)
 
 NaiveNASlib.nout(::SizePseudoTransparent, v::AbstractVertex) = calc_outsize(v)
 NaiveNASlib.nin(::SizePseudoTransparent, v::AbstractVertex) = nin(SizeInvariant(), v)
@@ -70,7 +69,7 @@ function calc_outsize(r::Reshape, v)
 end
 
 
-function NaiveNASlib.Δsize!(r::Reshape{<:Tuple}, ins::AbstractArray, outs::AbstractArray)
+function NaiveNASlib.Δsize!(r::Reshape{<:Tuple}, ins::AbstractVector, outs::AbstractVector; kwargs...)
     r.dims = Tuple(map(enumerate(r.dims)) do (i, s)
         s isa Colon && return s
         i == r.adim && return length(outs)
@@ -85,9 +84,9 @@ NaiveNASflux.actrank(r::Reshape) = length(r.dims)
 # What about compconstraint for NaiveNASlib.AbstractJuMPSelectionStrategy? Ugh... I give up! Will be treated as SizeAbsorb, i.e no attempt to map elements between input and outputs.
 
 # Special case: Reshape to 2D with variable batch size. Maybe a more general case when this is ok is hiding here somewhere...
-NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape{Tuple{Int, Colon}}, data) = reshape_nout_constraint(s, Colon(), r, filter(vin -> vin in keys(data.noutdict), inputs(data.vertex)), data)
+NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape{Tuple{Int, Colon}}, data) = reshape_nout_constraint(s, Colon(), r, filter(vin -> vin in keys(data.noutdict), inputs(data.vertex)), data)
 
-function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape, data)
+function NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
 
     reshape_nout_constraint(s, r.dims[r.adim], r, ins, data)
@@ -191,7 +190,7 @@ function calc_outsize(::Flatten, v)
     return 0 #We don't know yet...
 end
 
-function NaiveNASlib.compconstraint!(s::NaiveNASlib.AbstractJuMPΔSizeStrategy, f::Flatten, data)
+function NaiveNASlib.compconstraint!(case, ::AbstractJuMPΔSizeStrategy, f::Flatten, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
     for iv in ins
         inadim = unique(actdim(iv))[] # Should be one element or else we are fked
