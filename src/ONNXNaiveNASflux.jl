@@ -9,7 +9,7 @@ using NaiveNASflux
 using NaiveNASflux: weights, bias
 using NaiveNASflux: indim, outdim, actdim, actrank, layertype
 using NaiveNASflux: FluxLayer, FluxParLayer, FluxNoParLayer, FluxDense, FluxConvolutional, FluxConv, FluxBatchNorm, 
-                    FluxRecurrent, FluxRnn, FluxLstm, FluxGru, FluxTransparentLayer
+                    FluxRecurrent, FluxRnn, FluxLstm, FluxGru, FluxTransparentLayer, FluxPoolLayer, FluxDropOut
 using Setfield
 using Statistics
 import Pkg

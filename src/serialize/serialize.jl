@@ -305,11 +305,6 @@ actfun(::FluxBatchNorm, l) = l.λ
 (l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
 (l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
 
-NaiveNASflux.layertype(::Flux.RNNCell) = FluxRnn()
-NaiveNASflux.layertype(::Flux.LSTMCell) = FluxLstm()
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wi
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wi
-
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
     wname, rname, bname = lname .* ("_W", "_R", "_B")

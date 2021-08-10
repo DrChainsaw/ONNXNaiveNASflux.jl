@@ -159,25 +159,25 @@ fluxlayers[:MaxPool] = function(params)
     _,k,p,s,_ = akpsd(params)
     return MaxPool(k, pad=p, stride=s)
 end
-fluxlayertypes[:MaxPool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:MaxPool] = (pars...) -> FluxPoolLayer()
 
 
 fluxlayers[:AveragePool] = function(params)
     _,k,p,s,_ = akpsd(params)
     return MeanPool(k, pad=p, stride=s)
 end
-fluxlayertypes[:AveragePool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:AveragePool] = (pars...) -> FluxPoolLayer()
 
 
 fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
-fluxlayertypes[:Dropout] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:Dropout] = (pars...) -> FluxDropOut()
 
 
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
     return x -> globalmeanpool(x, wrap)
 end
-fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxPoolLayer()
 
 function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MeanPool(size(x)[1:N-2])(x))
@@ -187,7 +187,7 @@ invariantops[:GlobalMaxPool] = function(params)
     wrap = get(params, :wrap, identity)
     return x -> globalmaxpool(x, wrap)
 end
-fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxPoolLayer()
 
 function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MaxPool(size(x)[1:N-2])(x))
