@@ -36,9 +36,9 @@ function CompGraphBuilder(g::ONNX.GraphProto, insizes::Pair{String, <:Tuple}...)
 end
    
 function CompGraphBuilder(g::ONNX.GraphProto, inoutsizes::AbstractDict)
-    allsizes = merge(sizes(g), inoutsizes) |> clean_size
-    initdict = Dict(tp.name => tp for tp in g.initializer)
-    CompGraphBuilder(g, allsizes, output_to_node(g.node, initdict), IdDict{OnnxNode, AbstractVertex}(), AbstractVertex[])
+   allsizes = merge(sizes(g), inoutsizes) |> clean_size
+   initdict = Dict(tp.name => tp for tp in g.initializer)
+   CompGraphBuilder(g, allsizes, output_to_node(g.node, initdict), IdDict{OnnxNode, AbstractVertex}(), AbstractVertex[])
 end
 
 sizes(mp::ONNX.ModelProto) = sizes(mp.graph)

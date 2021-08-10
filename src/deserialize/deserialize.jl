@@ -15,69 +15,19 @@ NaiveNASlib.name(n::ONNX.NodeProto) = n.name
 NaiveNASlib.name(vip::ONNX.ValueInfoProto) = vip.name
 NaiveNASlib.name(tp::ONNX.TensorProto) = tp.name
 
-load(filename::String, insizes...; vfun = create_vertex_default) = open(io -> load(io, insizes...; vfun), filename)
-load(io::IO, insizes...; vfun = create_vertex_default) = load(extract(io), insizes...; vfun)
-load(m::ONNX.ModelProto, insizes...; vfun = create_vertex_default) = load(m.graph, insizes...; vfun)
-load(g::ONNX.GraphProto, insizes...; vfun = create_vertex_default) = CompGraph(g, insizes...; vfun)
-NaiveNASlib.CompGraph(g::ONNX.GraphProto, insizes...; vfun = create_vertex_default) = CompGraph(CompGraphBuilder(g, insizes...); vfun)
-function NaiveNASlib.CompGraph(gb::CompGraphBuilder; vfun = create_vertex_default)
-   outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(gb.g.output), gb), vfun)
-   fix_zerosizes!.(outputs, gb)
-   graph = CompGraph(gb.inputs, outputs)
-   return graph
-end
-
-# This is pretty specific to NaiveNASlib as it has size metadata for all vertices to aid in lazy mutations
-# Sometimes the size values are missing from the protos and then we do this little thing to try to infer it from other sources under the assumption that the imported graph is size-consistent
-fix_zerosizes!(v::AbstractVertex, gb) = fix_zerosizes!(base(v), gb)
-function fix_zerosizes!(::InputVertex, ::Any) end
-function fix_zerosizes!(::CompVertex, ::Any) end
-function fix_zerosizes!(::SourceVertex, ::Any) end
-function fix_zerosizes!(v::MutationVertex, gb)
-    
-    if nout(v) == 0
-        outs = outputs(v)
-        if !isempty(outs)
-            vo = first(outs)
-            ind = findfirst(==(v), inputs(vo))
-            startnout = nin(vo)[ind]
-            Δnout(op(v), startnout)
-            NaiveNASlib.reset_out!(op(v))
-        elseif name(v) in keys(gb.sizes) && !isempty(gb.sizes[name(v)])
-            # Beware! Uninitialized sizes result in random sizes when loaded?!?!
-            # Lets avoid too big sizes
-            startnout = gb.sizes[name(v)][first(actdim(v))]
-            if startnout < 1e8
-                Δnout(op(v), startnout)
-                NaiveNASlib.reset_out!(op(v))
-            end
-        end
+load(filename::String, insizes...; kwargs...) = open(io -> load(io, insizes...; kwargs...), filename)
+load(io::IO, insizes...; kwargs...) = load(extract(io), insizes...; kwargs...)
+load(m::ONNX.ModelProto, insizes...; kwargs...) = load(m.graph, insizes...; kwargs...)
+load(g::ONNX.GraphProto, insizes...; kwargs...) = CompGraph(g, insizes...; kwargs...)
+NaiveNASlib.CompGraph(g::ONNX.GraphProto, insizes...; kwargs...) = CompGraph(CompGraphBuilder(g, insizes...); kwargs...)
+function NaiveNASlib.CompGraph(gb::CompGraphBuilder; vfun = create_vertex_default, infer_shapes=true)
+    outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(gb.g.output), gb), vfun)
+    graph = CompGraph(gb.inputs, outputs)
+    if infer_shapes
+        try_infer_sizes!(graph, (get(gb.sizes, n, (missing,)) for n in name.(inputs(graph)))...)
     end
-
-    for (ind, curr_insize) in enumerate(nin(v))
-        found_insize = findinsize(layertype(v), v, ind, gb)
-        if curr_insize == 0 && found_insize != 0
-            toset = zeros(Int, length(nin(v)))
-            toset[ind] = found_insize
-            Δnin(op(v), toset...)
-            NaiveNASlib.reset_in!(op(v))
-        elseif curr_insize != found_insize
-            @warn "Mismatched input sizes found for vertex with name $(name(v)) and layertype $(layertype(v)): $curr_insize vs $(found_insize)! Graph mutation near this vertex might not work"
-        end
-        fix_zerosizes!(inputs(v)[ind], gb)
-    end
+    return graph
 end
-
-function findinsize(lt, v, in_index, gb)
-    insize = nout(inputs(v)[in_index])
-    insize != 0 && return insize
-
-
-    fix_zerosizes!(inputs(v)[in_index], gb)
-    return nout(inputs(v)[in_index])
-end
-findinsize(::FluxParLayer, v, in_index, gb) = nin(layer(v))[]
-
 
 """
    vertex(gb::CompGraphBuilder, n::ONNX.Types.Node, vfun = create_vertex_default)

@@ -23,6 +23,7 @@ include("shapes.jl")
 include("validate.jl")
 
 include("deserialize/vertex.jl")
+include("deserialize/infershape.jl")
 include("deserialize/constraints.jl")
 include("deserialize/ops.jl")
 include("deserialize/graphbuilder.jl")

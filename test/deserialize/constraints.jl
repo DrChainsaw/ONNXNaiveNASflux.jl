@@ -1,7 +1,7 @@
 
 @testset "Constraints" begin
     using ONNXNaiveNASflux.NaiveNASflux
-    using ONNXNaiveNASflux: SizePseudoTransparent
+    using ONNXNaiveNASflux: SizePseudoTransparent, MeasureNout
     using NaiveNASflux: actdim
 
     dv(name, invertex, outsize) = dv(name, invertex, nout(invertex), outsize) 
@@ -12,7 +12,7 @@
     @testset "Reshape" begin
         using ONNXNaiveNASflux: Reshape    
 
-        rv(name, invertex, dims) = absorbvertex(name, Reshape(dims), invertex; traitdecoration=SizePseudoTransparent)
+        rv(name, invertex, dims) = absorbvertex(name, MeasureNout(Reshape(dims)), invertex; traitdecoration=SizePseudoTransparent)
 
         @testset "Reshape 2D -> 4D variable batch" begin
             v0 = inputvertex("in", 3)
@@ -65,6 +65,8 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
 
+            # note that this works only because MeasureNout got the size when we evaluated the graph absorbvertex
+            # In other cases one might need try_infer_sizes!
             @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
@@ -83,7 +85,9 @@
             g = CompGraph(v0, v3)
 
             @test size(g(ones(Float32, 3, 2))) == (2,5,4,2)
-
+          
+            # note that this works only because MeasureNout got the size when we evaluated the graph absorbvertex
+            # In other cases one might need try_infer_sizes!
             @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
 
             @test nout.(vertices(g)) == [3, 30, 3, 4]
@@ -135,7 +139,7 @@
             v3 = dv("v3", v2, 4)
 
             @test actdim(v2) == [actdim(layer(v2))] == [1]
-            @test layertype(v2) <: Reshape
+            @test layer(v2) isa Reshape
 
             g = CompGraph(v0, v3)
 
@@ -173,7 +177,7 @@
             v3 = dv("v3", v2, 40, 4)
 
             @test actdim(v2) == [actdim(layer(v2))] == [1]
-            @test layertype(v2) <: Reshape
+            @test layer(v2) isa Reshape
 
             g = CompGraph(v0, v3)
 
@@ -189,7 +193,7 @@
 
     @testset "Flatten" begin
         import ONNXNaiveNASflux: Flatten
-        fv(name, invertex, dim) = absorbvertex(name, Flatten(dim), invertex; traitdecoration=SizePseudoTransparent)
+        fv(name, invertex, dim) = absorbvertex(name, MeasureNout(Flatten(dim)), invertex; traitdecoration=SizePseudoTransparent)
 
         function tg(outsize, dim)
             v0 = inputvertex("in", 3)

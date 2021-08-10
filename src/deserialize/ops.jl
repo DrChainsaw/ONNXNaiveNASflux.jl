@@ -237,12 +237,12 @@ end
 
 pseudotransparentops[:Reshape] = function(params, shape)
     shape_t = Tuple(reverse(replace(shape, -1 => Colon())))
-    return Reshape(shape_t)
+    return MeasureNout(Reshape(shape_t))
 end
 
 pseudotransparentops[:Flatten] = function(params)
     dim = -get(params,:axis, 1)
-    return Flatten(dim)
+    return MeasureNout(Flatten(dim))
 end
 
 

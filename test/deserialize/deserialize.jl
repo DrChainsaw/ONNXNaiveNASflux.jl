@@ -213,7 +213,7 @@ end
     end
 
     @testset "$(tc.name) graph" begin
-        cg = load(model)
+        cg = load(model, size(inputs[1]))
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -221,7 +221,7 @@ end
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
         save(io, cg)
-        cg = load(io)
+        cg = load(io, size(inputs[1]))
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -266,9 +266,10 @@ end
 end
 
 @testset "Deserialize with inputs" begin
+    using NaiveNASflux: FluxDense, layertype
 
     function sumgraph()
-        ivs = inputvertex.(["in1", "in2"], 4, Ref(FluxDense())) 
+        ivs = denseinputvertex.(["in1", "in2"], 4) 
         g_org = CompGraph(ivs, "out" >> ivs[1] + ivs[2])
         pb = PipeBuffer()
         save(pb, g_org, "in1" => missing, "in2" => missing)
@@ -283,8 +284,13 @@ end
         ((4,missing), (4, :B)),
         ((:I, 3), (:I, 4))
     ) 
-        g_new = load(sumgraph(), inshapes...)
-        @test nout.(g_new.inputs) == insize.(inshapes) |> collect
+        expsizes =  insize.(inshapes) |> collect
+        g_new = if any(==(0), expsizes)
+            @test_logs (:warn, r"No valid input sizes") load(sumgraph(), inshapes...)
+        else
+            load(sumgraph(), inshapes...)
+        end
+        @test nout.(g_new.inputs) == expsizes
         @test layertype.(g_new.inputs) == [FluxDense(), FluxDense()]
     end
 
@@ -317,7 +323,7 @@ end
 
     @testset "Merge activation function" begin
         m = remodel(Dense(3,4, relu), (3, missing))
-        @test nv(m) == 2
+        @test nvertices(m) == 2
         @test layer(m.outputs[1]).σ == relu
     end
 
@@ -330,12 +336,12 @@ end
             x -> gp(x, xf -> reshape(xf, 3, :)),
         ), (4, 4, 3, missing))
 
-        @test nv(m) == 3
+        @test nvertices(m) == 3
     end
 
     @testset "Merge constant" begin
         m = remodel(x -> relu.(x) .+ (3))
-        @test nv(m) == 3
+        @test nvertices(m) == 3
         @test m([-1,1]) == [3, 4] 
     end
 end

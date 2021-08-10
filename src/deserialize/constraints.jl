@@ -2,8 +2,8 @@
 # Stuff in here should probably move to NaiveNASflux once mature enough...
 
 
-struct SizePseudoTransparent <: NaiveNASlib.DecoratingTrait
-    base::NaiveNASlib.MutationTrait
+struct SizePseudoTransparent{T} <: NaiveNASlib.DecoratingTrait
+    base::T
 end
 NaiveNASlib.base(t::SizePseudoTransparent) = t.base
 
@@ -53,13 +53,6 @@ Reshape(dims; activation_dim=actdim(guess_layertype(length(dims)))) = Reshape(ac
 (r::Reshape)(x) = any(==(0), r.dims) ? reshape_keepshape(x, r.dims) : reshape(x, r.dims)
 
 function calc_outsize(r::Reshape, v)
-    # TODO: Remove! Will SO if next vertex is transparent!
-    for vo in outputs(v)
-        for (voi, nini) in zip(inputs(vo), nin(vo))
-            voi === v && return nini
-        end
-    end
-
     invertex = first(inputs(v))
     outshape = r.dims[r.adim]
     outshape == 0 && return nout(invertex)
@@ -81,7 +74,9 @@ NaiveNASflux.layer(r::Reshape) = r
 NaiveNASflux.actdim(r::Reshape) = r.adim
 NaiveNASflux.actrank(r::Reshape) = length(r.dims)
 
-# What about compconstraint for NaiveNASlib.AbstractJuMPSelectionStrategy? Ugh... I give up! Will be treated as SizeAbsorb, i.e no attempt to map elements between input and outputs.
+# If Reshape is wrapped in an AbstractMutableComp we will hit this method instead due to how NaiveNASflux unwraps things
+NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, ::Type{<:Reshape}, data) = NaiveNASlib.compconstraint!(case, s, layer(data.vertex), data) 
+
 
 # Special case: Reshape to 2D with variable batch size. Maybe a more general case when this is ok is hiding here somewhere...
 NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, r::Reshape{Tuple{Int, Colon}}, data) = reshape_nout_constraint(s, Colon(), r, filter(vin -> vin in keys(data.noutdict), inputs(data.vertex)), data)
@@ -180,15 +175,11 @@ NaiveNASflux.layer(f::Flatten) = f
 NaiveNASflux.actdim(f::Flatten) = 1
 NaiveNASflux.actrank(f::Flatten) = 1
 
-function calc_outsize(::Flatten, v) 
-    # TODO: Remove! Will SO if next vertex is transparent!
-    for vo in outputs(v)
-        for (voi, nini) in zip(inputs(vo), nin(vo))
-            voi === v && return nini
-        end
-    end 
-    return 0 #We don't know yet...
-end
+calc_outsize(::Flatten, v) = 0
+
+# If Flatten is wrapped in an AbstractMutableComp we will hit this method instead due to how NaiveNASflux unwraps things
+NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, ::Type{<:Flatten}, data) = NaiveNASlib.compconstraint!(case, s, layer(data.vertex), data) 
+
 
 function NaiveNASlib.compconstraint!(case, ::AbstractJuMPΔSizeStrategy, f::Flatten, data)
     ins = filter(vin -> vin in keys(data.noutdict), inputs(data.vertex))
