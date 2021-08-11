@@ -905,10 +905,10 @@
     end
 
     @testset "Allowed input shapes" begin
-        function remodel(m, args...; assertwarn=false)
+        function remodel(m, args...; assertwarn=true)
             pb = PipeBuffer()
             save(pb, m, args...)
-            if assertwarn && any(ismissing, args)
+            if assertwarn
                 return @test_logs (:warn, r"No valid input sizes") load(pb)
             end
             return load(pb)
@@ -923,10 +923,11 @@
             op, testsizes, validsize = tc
             inpt = ones(Float32, validsize)
 
-            g1 = remodel(op)
+            g1 = remodel(op; assertwarn=false)
             @test g1(inpt) == op(inpt)
             @testset "Inputshape $s" for s in testsizes
-                g = remodel(op, s)
+                assertwarn = s isa Tuple && length(s) != length(shape(layertype(op), 1))
+                g = remodel(op, s; assertwarn)
                 Flux.reset!(op) # For RNNs or else the test below will fail
                 @test g(inpt) == op(inpt)
             end
@@ -935,14 +936,14 @@
         @testset "Allowed input shapes op: +" begin
             in1, in2 = ones(3), ones(3)
             op = (x,y) -> x .+ y
-            g1 = remodel(op)
+            g1 = remodel(op; assertwarn=false)
             @test g1(in1, in2) == in1 .+ in2
-            @testset "Inputshape $s1, $s2" for (s1, s2) in (
-                ((3,), (3,)),
-                ((missing,), (missing,)),
-                (missing, missing),
+            @testset "Inputshape $s1, $s2" for (s1, s2, assertwarn) in (
+                ((3,), (3,), false),
+                ((missing,), (missing,), true),
+                (missing, missing, false),
                 )
-                g = remodel(op, s1, s2; assertwarn=false)
+                g = remodel(op, s1, s2; assertwarn)
                 @test g(in1, in2) == in1 .+ in2
             end
         end

@@ -77,10 +77,12 @@ node(nodename::String, gb::CompGraphBuilder, parent=nothing) = get!(gb.allnodes,
    inputnode.op_type= "Input"
 
    pnode = get(gb.allnodes, name(parent), nothing)
-   ltypes = find_valid_fluxlayertype(pnode, gb) |> Tuple
+   # We want nodes as well as layertypes in case we need to infer the size from the selected node
+   node_to_ltypes = find_valid_fluxlayertype(pnode, gb) |> Tuple
 
-   inshape = gb.sizes[nodename]
-   ltype = select_layertype(nodename, inshape, ltypes)
+   # gb.sizes can be missing, 0 or some tuple where the nout dimension is missing
+   # If this is the case we try to infer it from one of node_to_ltypes
+   inshape, ltype= select_layertype(nodename, gb.sizes[nodename], node_to_ltypes)
 
    return OnnxNode(inputnode, ONNX.TensorProto[], Dict{Symbol, Any}(:size=>inshape, :ltype=>ltype))
 end
@@ -91,7 +93,7 @@ function find_valid_fluxlayertype(n::OnnxNode, gb, seen=[])
    push!(seen, n)
 
    lt = fluxlayertypes[optype(n)](n.params...)
-   lt isa FluxParLayer && return [generic(lt)]
+   lt isa FluxParLayer && return [n => generic(lt)]
    stop_search(optype(n)) && return []
 
    return mapreduce(vcat, vcat(outnames(n, gb), innames(n)); init=[]) do outname
@@ -113,16 +115,26 @@ stop_search(::Type{Val{:Squeeze}}) = true
 stop_search(::Type{Val{:ReshapeMean}}) = true
 
 
-function select_layertype(inname, inshape, lts::Tuple)
-   ltsvalid = filter(lts) do lt
-      length(inshape) == 0 || length(inshape) == length(shape(lt, 0))
-   end |> unique
+function select_layertype(inname, inshape, node_to_lts::Tuple)
+   node_to_lts_valid = filter(node_to_lts) do n2lt
+      length(inshape) == 0 || length(inshape) == length(shape(last(n2lt), 0))
+   end
    
-   length(ltsvalid) == 1 && return ltsvalid[1]
-   length(ltsvalid) == 0 && return guess_layertype(length(inshape))
-   @warn "Multiple layertypes found for input $inname with shape $inshape: $(ltsvalid)! Graph mutation near this vertex might fail!"
-   return first(ltsvalid)
+   insize_to_lts_valid = unique(fix_invalid_insize.(Ref(inshape), node_to_lts_valid))
+
+   length(insize_to_lts_valid) == 1 && return insize_to_lts_valid[1]
+   length(insize_to_lts_valid) == 0 && return inshape, guess_layertype(length(inshape))
+   @warn "Multiple layertypes found for input $inname with shape $inshape: $(last.(insize_to_lts_valid))! Graph mutation near this vertex might fail!"
+   return first(insize_to_lts_valid)
 end
+
+fix_invalid_insize(::Missing, (node,lt)::Pair) = shape(lt, fluxlayer_nout(node)) => lt
+fix_invalid_insize(::Tuple{}, node_to_lt::Pair) = fix_invalid_insize(missing, node_to_lt)
+fix_invalid_insize(inshape::Tuple, (node,lt)::Pair) = fix_invalid_insize(inshape[actdim(lt)], node=>lt)
+fix_invalid_insize(insize::Integer, node_to_lt) = insize > 0 ? shape(last(node_to_lt), insize) => last(node_to_lt) : fix_invalid_insize(missing, node_to_lt) 
+
+# Not beautiful that we instantiate a whole layer and then throw it away just to measure nout, but we generally don't do this very often
+fluxlayer_nout(node::OnnxNode) = fluxlayers[optype(node)](node.attribute, params(node)...) |> nout
 
 nodes(gb::CompGraphBuilder) = values(gb.allnodes)
 innames(n::OnnxNode) = innames(n.proto)

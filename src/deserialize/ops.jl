@@ -250,6 +250,7 @@ verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     ltype = params[:ltype]
     indims = length(inshape)
+
     insize = indims > 0 ? inshape[max(1, actdim(ltype))] : 1 # assume scalar
     return inputvertex(name, insize, ltype)
 end

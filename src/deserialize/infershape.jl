@@ -38,7 +38,7 @@ function try_infer_sizes!(g, insizes...)
             lt isa FluxRecurrent && length(insize) == 3 && return insize[1:end-2]
             insize[1:end-1]
         end
-        if length(insizes) === length(inputs(g)) && all(inshape -> all(s -> s isa Number && s > 0, inshape), insizes_nobatch) 
+        if length(insizes) === length(inputs(g)) && all(inshape -> !isempty(inshape) && all(s -> s isa Number && s > 0, inshape), insizes_nobatch) 
             # This will make any MeasureNout to become aware of the size
             Flux.outputsize(g,insizes_nobatch...; padbatch=true)
         else

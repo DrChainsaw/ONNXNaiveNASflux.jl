@@ -84,7 +84,7 @@ function infer_inshapes(::Any, f)
     for m in ml.ms
         m.sig isa DataType && return Tuple(infer_shape.(m.sig.types[2:end]))
     end
-    return ntuple(i -> missing, ml.mt.max_args)
+    return     @show(ntuple(i -> missing, ml.mt.max_args))
 end
 infer_shape(::Type{<:Any}) = missing
 infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
