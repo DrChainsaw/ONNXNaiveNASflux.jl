@@ -7,7 +7,7 @@ const ONNX = BaseOnnx
 using Flux
 using NaiveNASflux
 using NaiveNASflux: weights, bias
-using NaiveNASflux: indim, outdim, actdim, actrank, layertype
+using NaiveNASflux: indim, outdim, actdim, actrank, layertype, wrapped
 using NaiveNASflux: FluxLayer, FluxParLayer, FluxNoParLayer, FluxDense, FluxConvolutional, FluxConv, FluxBatchNorm, 
                     FluxRecurrent, FluxRnn, FluxLstm, FluxGru, FluxTransparentLayer, FluxPoolLayer, FluxDropOut, Flux2D,
                     GenericFluxConvolutional, GenericFlux2D, GenericFluxRecurrent

@@ -23,7 +23,8 @@ end
 measuresize!(mn::MeasureNout, x::AbstractArray) = mn.outsize[] = size(x, mn.actdim)
 function measuresize!(::MeasureNout, x) end # Need methods for AbstractProbe?
 
-function calc_outsize(mn, v) 
+calc_outsize(m::NaiveNASflux.AbstractMutableComp, v) = calc_outsize(wrapped(m), v)
+function calc_outsize(mn::MeasureNout, v) 
     if mn.outsize[] == 0
         mn.outsize[] = calc_outsize(mn.wrapped, v)
     end
@@ -41,6 +42,7 @@ function try_infer_sizes!(g, insizes...)
         if length(insizes) === length(inputs(g)) && all(inshape -> !isempty(inshape) && all(s -> s isa Number && s > 0, inshape), insizes_nobatch) 
             # This will make any MeasureNout to become aware of the size
             Flux.outputsize(g,insizes_nobatch...; padbatch=true)
+            update_size_meta!(g)
         else
             @warn  "No valid input sizes provided. Shape inference could not be done. Either provide Integer insizes manually or use load(...; infer_shapes=false) to disable. If disabled, graph mutation might not work."
         end
@@ -50,3 +52,31 @@ function try_infer_sizes!(g, insizes...)
         throw(CompositeException([ErrorException("Size inference failed! Use load(...; infer_shapes=false) to disable! If disabled, graph mutation might not work."), e]))
     end
 end
+
+update_size_meta!(g::CompGraph) = foreach(update_size_meta!, vertices(g))
+update_size_meta!(v::AbstractVertex) = update_size_meta!(base(v))
+update_size_meta!(::InputVertex) = nothing
+update_size_meta!(v::CompVertex) = update_size_meta!(v.computation)
+update_size_meta!(m::NaiveNASflux.AbstractMutableComp, args...) = update_size_meta!(wrapped(m), args...)
+
+function update_size_meta!(m::ActivationContribution, args...)
+    outsize = update_size_meta!(wrapped(m), args...)
+    if (outsize !== missing) && (m.contribution === missing || length(m.contribution) != outsize)
+        m.contribution = zeros(eltype(m.contribution), outsize)
+    end
+    return outsize
+end
+
+function update_size_meta!(m::LazyMutable, args...)
+    outsize = update_size_meta!(wrapped(m), args...)
+    if (outsize !== missing) && (m.outputs === missing || length(m.outputs) != outsize)
+        m.outputs = 1:outsize
+    end
+    return outsize
+end
+
+update_size_meta!(m::MeasureNout, args...) = update_size_meta!(wrapped(m), nout(m))
+update_size_meta!(f, outsize::Integer) = outsize
+update_size_meta!(f) = missing
+
+

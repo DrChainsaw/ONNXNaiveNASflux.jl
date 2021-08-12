@@ -345,3 +345,41 @@ end
         @test m([-1,1]) == [3, 4] 
     end
 end
+
+@testset "Infer CompGraph shapes" begin
+    function remodel(f, args...;kwargs...) 
+        pb = PipeBuffer()
+        save(pb, f)
+        return load(pb, args...;kwargs...)
+    end
+
+    @testset "Simple Dense" begin
+        v1 = denseinputvertex("v1", 3)
+        v2 = fluxvertex("v2", Dense(nout(v1), 4), v1)
+        g = remodel(CompGraph(v1, v2))
+        
+        @test nout(inputs(g)[]) == nout(v1)
+    end
+
+    @testset "Flatten$label" for (label, layerfun, exputilsize) in 
+        (
+        ("", identity, 1),
+        ("with ActivationContribution", ActivationContribution, 60),
+        # TODO: Make work!
+        #(" with LazyMutable", LazyMutable, 1),
+        #(" with ActivationContribution and LazyMutable", ActivationContribution ∘ LazyMutable, 60),
+        #(" with LazyMutable and ActivationContribution", LazyMutable ∘ ActivationContribution, 60),
+        )
+        using ONNXNaiveNASflux: Flatten, create_vertex_default, defaultutility
+
+        v1 = conv2dinputvertex("v1", 3)
+        v2 = fluxvertex("v2", Conv((2,2), 3=>5), v1)
+        v3 = absorbvertex("v3", Flatten(-1), v2)
+
+        g = remodel(CompGraph(v1, v3), (5,4,3,:B); vfun=(args...) -> create_vertex_default(args...; layerfun))
+
+        @test nout(inputs(g)[]) == nout(v1)
+        @test nout(g[end]) == 60
+        @test length(defaultutility(g[end])) == exputilsize
+    end
+end
