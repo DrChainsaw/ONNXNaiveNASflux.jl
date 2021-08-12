@@ -72,13 +72,19 @@ node(nodename::String, gb::CompGraphBuilder, parent=nothing) = get!(gb.allnodes,
    # Create a fake node to make 1<->1 mapping with NaiveNASflux which uses a special vertex type as output
    inputnode = ONNX.NodeProto()
    inputnode.input = AbstractString[]
-   inputnode.output = AbstractString[name(parent)]
+   inputnode.output = AbstractString[name(n) for n in values(gb.allnodes) if nodename in innames(n)]
    inputnode.name = nodename
    inputnode.op_type= "Input"
 
-   pnode = get(gb.allnodes, name(parent), nothing)
    # We want nodes as well as layertypes in case we need to infer the size from the selected node
-   node_to_ltypes = find_valid_fluxlayertype(pnode, gb) |> Tuple
+   # Unfortunate failure case: If the only way to see a valid fluxlayertype is through concatenation we will fail to infer the shape.
+   # This is because find_valid_fluxlayertype must also return a node for which the input size can be used as the size of inputnode, 
+   # and it is not capable of doing so if we pass through concatenation. Might need to split up layertypes and sizes and try to 
+   # connect them later which just feels like a huge hassle right now. Another option is perhaps to track if we pass throgh concatenation
+   # and return some other object which deals with the concatenation, either by failing, or in cases when it is possible to calculate 
+   # backwards (e.g. inputnode concatenated with a node of known size).
+   names_to_search = filter(n -> n in keys(gb.allnodes), inputnode.output)
+   node_to_ltypes = mapreduce(outname -> find_valid_fluxlayertype(gb.allnodes[outname], gb), vcat, names_to_search; init=[]) |> Tuple
 
    # gb.sizes can be missing, 0 or some tuple where the nout dimension is missing
    # If this is the case we try to infer it from one of node_to_ltypes
@@ -107,13 +113,15 @@ generic(::Flux2D) = GenericFlux2D()
 generic(::FluxRecurrent) = GenericFluxRecurrent()
 generic(lt) = lt
 
-stop_search(lt) = false
+stop_search(ot) = false
 stop_search(ot::Symbol) = stop_search(Val{ot})
 stop_search(::Type{Val{:Reshape}}) = true
 stop_search(::Type{Val{:Flatten}}) = true
 stop_search(::Type{Val{:Squeeze}}) = true
 stop_search(::Type{Val{:ReshapeMean}}) = true
-
+# This is a bit unfortunate as we can still infer the layertype, just not the size. They are however connected right now
+# and decoupling them would be a bit of a hassle...
+stop_search(::Type{Val{:Concat}}) = true
 
 function select_layertype(inname, inshape, node_to_lts::Tuple)
    node_to_lts_valid = filter(node_to_lts) do n2lt
@@ -128,13 +136,13 @@ function select_layertype(inname, inshape, node_to_lts::Tuple)
    return first(insize_to_lts_valid)
 end
 
-fix_invalid_insize(::Missing, (node,lt)::Pair) = shape(lt, fluxlayer_nout(node)) => lt
+fix_invalid_insize(::Missing, (node,lt)::Pair) = shape(lt, fluxlayer_nin(node)) => lt
 fix_invalid_insize(::Tuple{}, node_to_lt::Pair) = fix_invalid_insize(missing, node_to_lt)
 fix_invalid_insize(inshape::Tuple, (node,lt)::Pair) = fix_invalid_insize(inshape[actdim(lt)], node=>lt)
 fix_invalid_insize(insize::Integer, node_to_lt) = insize > 0 ? shape(last(node_to_lt), insize) => last(node_to_lt) : fix_invalid_insize(missing, node_to_lt) 
 
 # Not beautiful that we instantiate a whole layer and then throw it away just to measure nout, but we generally don't do this very often
-fluxlayer_nout(node::OnnxNode) = fluxlayers[optype(node)](node.attribute, params(node)...) |> nout
+fluxlayer_nin(node::OnnxNode) = fluxlayers[optype(node)](node.attribute, params(node)...) |> nin |> first
 
 nodes(gb::CompGraphBuilder) = values(gb.allnodes)
 innames(n::OnnxNode) = innames(n.proto)

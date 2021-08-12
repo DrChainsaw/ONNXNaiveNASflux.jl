@@ -1,7 +1,7 @@
 import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
 using ONNXNaiveNASflux.NaiveNASflux
 
-# Logging to avoid travis timeouts
+# Logging to avoid CI timeouts
 @info "  Test padding and sources"
 
 @testset "Read padding" begin
@@ -349,26 +349,43 @@ end
 @testset "Infer CompGraph shapes" begin
     function remodel(f, args...;kwargs...) 
         pb = PipeBuffer()
-        save(pb, f)
-        return load(pb, args...;kwargs...)
+        save(pb, f, args...)
+        return load(pb,; kwargs...)
     end
 
     @testset "Simple Dense" begin
         v1 = denseinputvertex("v1", 3)
         v2 = fluxvertex("v2", Dense(nout(v1), 4), v1)
-        g = remodel(CompGraph(v1, v2))
+        g = remodel(CompGraph(v1, v2), missing)
         
         @test nout(inputs(g)[]) == nout(v1)
+    end
+
+    
+    @testset "After invariant" begin
+        v1 = denseinputvertex("v1", 3)
+        v2 = invariantvertex("v2", identity, v1)
+        v3 = fluxvertex("v3", Dense(nout(v2), 4), v2)
+        g = remodel(CompGraph(v1, v3), missing)
+
+        @test nout(inputs(g)[]) == nout(v1)
+    end
+
+    @testset "Can't infer after concat" begin
+        # I suppose in this case we could infer it as we know nin(v3) = 2 * nout(v1)
+        # Seems like too much of an edge case to be worth considering though
+        v1 = denseinputvertex("v1", 3)
+        v2 = concat("v2", v1, v1)
+        v3 = fluxvertex("v3", Dense(nout(v2), 4), v2)
+        g = @test_logs (:warn, r"No valid input sizes") remodel(CompGraph(v1, v3), (missing, :B))
+
+        @test nout(inputs(g)[]) == 0
     end
 
     @testset "Flatten$label" for (label, layerfun, exputilsize) in 
         (
         ("", identity, 1),
         ("with ActivationContribution", ActivationContribution, 60),
-        # TODO: Make work!
-        #(" with LazyMutable", LazyMutable, 1),
-        #(" with ActivationContribution and LazyMutable", ActivationContribution ∘ LazyMutable, 60),
-        #(" with LazyMutable and ActivationContribution", LazyMutable ∘ ActivationContribution, 60),
         )
         using ONNXNaiveNASflux: Flatten, create_vertex_default, defaultutility
 
