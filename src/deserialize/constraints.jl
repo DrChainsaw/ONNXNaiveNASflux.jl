@@ -24,7 +24,7 @@ This is basically trying to be compliant to the ONNX Reshape operator although t
 """
 function reshape_keepshape(x, shape)
     offs = ndims(x) - length(shape)
-    newshape = map(enumerate(shape)) do (ind, new)
+    newshape = Flux.Zygote.@ignore map(enumerate(shape)) do (ind, new)
         new == 0 && return size(x, ind+offs)
         return new
     end
