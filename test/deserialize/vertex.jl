@@ -12,9 +12,5 @@
 
         @test nout(sv) == 3
         @test nin(sv) == []
-
-        @test ismissing(minΔninfactor(sv))
-        @test ismissing(minΔnoutfactor(sv))
     end
-
 end

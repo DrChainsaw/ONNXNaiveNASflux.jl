@@ -1,7 +1,7 @@
 import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
 using ONNXNaiveNASflux.NaiveNASflux
 
-# Logging to avoid travis timeouts
+# Logging to avoid CI timeouts
 @info "  Test padding and sources"
 
 @testset "Read padding" begin
@@ -213,7 +213,7 @@ end
     end
 
     @testset "$(tc.name) graph" begin
-        cg = load(model)
+        cg = load(model, size(inputs[1]))
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -221,7 +221,7 @@ end
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
         save(io, cg)
-        cg = load(io)
+        cg = load(io, size(inputs[1]))
         res = cg(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -266,9 +266,10 @@ end
 end
 
 @testset "Deserialize with inputs" begin
+    using NaiveNASflux: GenericFlux2D, layertype
 
     function sumgraph()
-        ivs = inputvertex.(["in1", "in2"], 4, Ref(FluxDense())) 
+        ivs = denseinputvertex.(["in1", "in2"], 4) 
         g_org = CompGraph(ivs, "out" >> ivs[1] + ivs[2])
         pb = PipeBuffer()
         save(pb, g_org, "in1" => missing, "in2" => missing)
@@ -283,9 +284,14 @@ end
         ((4,missing), (4, :B)),
         ((:I, 3), (:I, 4))
     ) 
-        g_new = load(sumgraph(), inshapes...)
-        @test nout.(g_new.inputs) == insize.(inshapes) |> collect
-        @test layertype.(g_new.inputs) == [FluxDense(), FluxDense()]
+        expsizes =  insize.(inshapes) |> collect
+        g_new = if any(==(0), expsizes)
+            @test_logs (:warn, r"No valid input sizes") load(sumgraph(), inshapes...)
+        else
+            load(sumgraph(), inshapes...)
+        end
+        @test nout.(g_new.inputs) == expsizes
+        @test layertype.(g_new.inputs) == [GenericFlux2D(), GenericFlux2D()]
     end
 
     inshape(t::Tuple) = t |> length |> ONNXNaiveNASflux.guess_layertype
@@ -317,7 +323,7 @@ end
 
     @testset "Merge activation function" begin
         m = remodel(Dense(3,4, relu), (3, missing))
-        @test nv(m) == 2
+        @test nvertices(m) == 2
         @test layer(m.outputs[1]).σ == relu
     end
 
@@ -330,12 +336,67 @@ end
             x -> gp(x, xf -> reshape(xf, 3, :)),
         ), (4, 4, 3, missing))
 
-        @test nv(m) == 3
+        @test nvertices(m) == 3
     end
 
     @testset "Merge constant" begin
         m = remodel(x -> relu.(x) .+ (3))
-        @test nv(m) == 3
+        @test nvertices(m) == 3
         @test m([-1,1]) == [3, 4] 
+    end
+end
+
+@testset "Infer CompGraph shapes" begin
+    function remodel(f, args...;kwargs...) 
+        pb = PipeBuffer()
+        save(pb, f, args...)
+        return load(pb,; kwargs...)
+    end
+
+    @testset "Simple Dense" begin
+        v1 = denseinputvertex("v1", 3)
+        v2 = fluxvertex("v2", Dense(nout(v1), 4), v1)
+        g = remodel(CompGraph(v1, v2), missing)
+        
+        @test nout(inputs(g)[]) == nout(v1)
+    end
+
+    
+    @testset "After invariant" begin
+        v1 = denseinputvertex("v1", 3)
+        v2 = invariantvertex("v2", identity, v1)
+        v3 = fluxvertex("v3", Dense(nout(v2), 4), v2)
+        g = remodel(CompGraph(v1, v3), missing)
+
+        @test nout(inputs(g)[]) == nout(v1)
+    end
+
+    @testset "Can't infer after concat" begin
+        # I suppose in this case we could infer it as we know nin(v3) = 2 * nout(v1)
+        # Seems like too much of an edge case to be worth considering though
+        v1 = denseinputvertex("v1", 3)
+        v2 = concat("v2", v1, v1)
+        v3 = fluxvertex("v3", Dense(nout(v2), 4), v2)
+        g = @test_logs (:warn, r"No valid input sizes") remodel(CompGraph(v1, v3), (missing, :B))
+
+        @test nout(inputs(g)[]) == 0
+    end
+
+    @testset "Flatten$label" for (label, layerfun, exputilsize) in 
+        (
+        ("", identity, 1),
+        ("with ActivationContribution", ActivationContribution, 60),
+        )
+        using ONNXNaiveNASflux: Flatten, create_vertex_default, defaultutility
+
+        v1 = conv2dinputvertex("v1", 3)
+        v2 = fluxvertex("v2", Conv((2,2), 3=>5), v1)
+        v3 = absorbvertex("v3", Flatten(-1), v2)
+
+        g = remodel(CompGraph(v1, v3), (5,4,3,:B); vfun=(args...) -> create_vertex_default(args...; layerfun))
+
+        @test nout(inputs(g)[]) == nout(v1)
+        @test nout(g[end]) == 60
+        @test length(defaultutility(g[end])) == exputilsize
     end
 end

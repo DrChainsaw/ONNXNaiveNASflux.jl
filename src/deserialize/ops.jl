@@ -159,25 +159,25 @@ fluxlayers[:MaxPool] = function(params)
     _,k,p,s,_ = akpsd(params)
     return MaxPool(k, pad=p, stride=s)
 end
-fluxlayertypes[:MaxPool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:MaxPool] = (pars...) -> FluxPoolLayer()
 
 
 fluxlayers[:AveragePool] = function(params)
     _,k,p,s,_ = akpsd(params)
     return MeanPool(k, pad=p, stride=s)
 end
-fluxlayertypes[:AveragePool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:AveragePool] = (pars...) -> FluxPoolLayer()
 
 
 fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
-fluxlayertypes[:Dropout] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:Dropout] = (pars...) -> FluxDropOut()
 
 
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
     return x -> globalmeanpool(x, wrap)
 end
-fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxPoolLayer()
 
 function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MeanPool(size(x)[1:N-2])(x))
@@ -187,7 +187,7 @@ invariantops[:GlobalMaxPool] = function(params)
     wrap = get(params, :wrap, identity)
     return x -> globalmaxpool(x, wrap)
 end
-fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxNoParLayer()
+fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxPoolLayer()
 
 function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
     wrap(MaxPool(size(x)[1:N-2])(x))
@@ -237,12 +237,12 @@ end
 
 pseudotransparentops[:Reshape] = function(params, shape)
     shape_t = Tuple(reverse(replace(shape, -1 => Colon())))
-    return Reshape(shape_t)
+    return MeasureNout(Reshape(shape_t))
 end
 
 pseudotransparentops[:Flatten] = function(params)
     dim = -get(params,:axis, 1)
-    return Flatten(dim)
+    return MeasureNout(Flatten(dim))
 end
 
 
@@ -250,6 +250,7 @@ verts[:Input] = function(name, inputs, params; kwargs...)
     inshape = params[:size]
     ltype = params[:ltype]
     indims = length(inshape)
+
     insize = indims > 0 ? inshape[max(1, actdim(ltype))] : 1 # assume scalar
     return inputvertex(name, insize, ltype)
 end
@@ -263,7 +264,7 @@ function elemwisevertex(name, inputs, params, op, id; traitdecoration=identity, 
     c = length(c) == 1 ? c[] : c
     let cc = c
         opp, wrap = cc == id ? (op, layerfun) : (identity, f -> layerfun((x...) -> op.(cc, x...)))
-        conf = VertexConf(traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap = wrap, kwargs...)
+        conf = VertexConf(traitdecoration = named(name) ∘ traitdecoration, outwrap = wrap, kwargs...)
         return NaiveNASlib.elemwise(opp, conf, inputs...)
     end
 end
@@ -271,7 +272,7 @@ end
 
 verts[:Concat] = function(name, inputs, params; traitdecoration=identity, layerfun=identity, kwargs...)
     dims = numpy2fluxdim(params[:axis], inputs[1])
-    return conc(inputs..., dims=dims, traitdecoration = t -> NamedTrait(traitdecoration(t), name), outwrap=layerfun, kwargs...)
+    return conc(inputs..., dims=dims, traitdecoration = named(name) ∘ traitdecoration, outwrap=layerfun, kwargs...)
 end
 
 
@@ -292,18 +293,17 @@ function refresh()
     end
 
     for (s, f) in fluxlayers
-        verts[s] = (name, inputs, args...;kwargs...) -> mutable(name, f(args...), inputs...; kwargs...)
+        verts[s] = (name, inputs, args...;kwargs...) -> fluxvertex(name, f(args...), inputs...; kwargs...)
     end
 
     for (s, f) in invariantops
-        verts[s] = (name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...) -> invariantvertex(layerfun(f(args...)), inputs...; traitdecoration = t -> NamedTrait(traitdecoration(t), name), kwargs...)
+        verts[s] = (name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...) -> invariantvertex(layerfun(f(args...)), inputs...; traitdecoration = named(name) ∘ traitdecoration, kwargs...)
     end
 
     for (s,f) in pseudotransparentops
         verts[s] = function(name, inputs, args...;traitdecoration=identity, layerfun=identity, kwargs...)
             comp = f(args...)
-            outsize = calc_outsize(comp, inputs...)
-            return absorbvertex(layerfun(comp), outsize, inputs...; traitdecoration = t -> NamedTrait(traitdecoration(SizePseudoTransparent(t)), name), kwargs...)
+            return absorbvertex(layerfun(comp), inputs...; traitdecoration = named(name) ∘ traitdecoration ∘ SizePseudoTransparent, kwargs...)
         end
     end
 

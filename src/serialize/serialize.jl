@@ -77,14 +77,14 @@ end
 infer_inshapes(sc::SkipConnection) = infer_inshapes(sc.layers)
 infer_inshapes(l) = infer_inshapes(layertype(l), l)
 infer_inshapes(lt::FluxTransparentLayer, ::Any) = lt 
-infer_inshapes(lt::FluxParLayer, l) = tuple(shape(lt, nin(l)))
+infer_inshapes(lt::FluxParLayer, l) = tuple(shape(lt, nin(l)...))
 
 function infer_inshapes(::Any, f)
     ml = methods(f);
     for m in ml.ms
         m.sig isa DataType && return Tuple(infer_shape.(m.sig.types[2:end]))
     end
-    return ntuple(i -> missing, ml.mt.max_args)
+    return     @show(ntuple(i -> missing, ml.mt.max_args))
 end
 infer_shape(::Type{<:Any}) = missing
 infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
@@ -129,7 +129,7 @@ add_output!(p::ProtoProbe) = push!(p.graph.output, ONNX.ValueInfoProto(name(p), 
 Base.ndims(p::AbstractProbe) = length(shape(p))
 function inputprotoprobe!(gp, name, shape, namestrat)
     push!(gp.input, ONNX.ValueInfoProto(name, shape))
-    pp = ProtoProbe(name, shape, namestrat, gp)
+    ProtoProbe(name, shape, namestrat, gp)
 end
 
 """
@@ -180,7 +180,7 @@ Argument `outshape` is a function which returns the shape of an `AbstractVertex`
 
 Argument `namestrat` determines how nodes shall be named.
 """
-graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(g.inputs, namestrat) .=> outshape.(g.inputs))...;namestrat=namestrat)
+graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(inputs(g), namestrat) .=> outshape.(inputs(g)))...;namestrat=namestrat)
 
 """
     graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())
@@ -259,7 +259,7 @@ function(l::Flux.Dense)(pp::AbstractProbe)
         outsize = shape(pp)[1]
         lname = recursename(l, nextname(pp))
         ppn = newnamestrat(pp, s -> lname * genname(s))
-        ppn = reshape(ppn, nin(l), :)
+        ppn = reshape(ppn, nin(l)[], :)
         ppl = newnamestrat(ppn, s -> lname)
     end
     ppout = weightlayer(layertype(l), l, ppl, "Gemm")
@@ -304,11 +304,6 @@ actfun(::FluxBatchNorm, l) = l.λ
 
 (l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
 (l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
-
-NaiveNASflux.layertype(::Flux.RNNCell) = FluxRnn()
-NaiveNASflux.layertype(::Flux.LSTMCell) = FluxLstm()
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.RNNCell) = l.Wi
-NaiveNASflux.weights(::FluxRecurrent, l::Flux.LSTMCell) = l.Wi
 
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))

@@ -4,14 +4,19 @@ include("baseonnx/BaseOnnx.jl")
 
 import .BaseOnnx: array
 const ONNX = BaseOnnx
+using Flux
 using NaiveNASflux
-import NaiveNASflux: weights, bias
-import NaiveNASflux: indim, outdim, actdim, actrank
+using NaiveNASflux: weights, bias
+using NaiveNASflux: indim, outdim, actdim, actrank, layertype, wrapped
+using NaiveNASflux: FluxLayer, FluxParLayer, FluxNoParLayer, FluxDense, FluxConvolutional, FluxConv, FluxBatchNorm, 
+                    FluxRecurrent, FluxRnn, FluxLstm, FluxGru, FluxTransparentLayer, FluxPoolLayer, FluxDropOut, Flux2D,
+                    GenericFluxConvolutional, GenericFlux2D, GenericFluxRecurrent
 using Setfield
 using Statistics
 import Pkg
 import JuMP: @variable, @constraint
-import NaiveNASflux.NaiveNASlib: compconstraint!, all_in_Δsize_graph
+using NaiveNASlib.Extend, NaiveNASlib.Advanced
+using NaiveNASlib: compconstraint!, all_in_Δsize_graph, NamedTrait, VertexConf
 
 export load, save
 
@@ -19,6 +24,7 @@ include("shapes.jl")
 include("validate.jl")
 
 include("deserialize/vertex.jl")
+include("deserialize/infershape.jl")
 include("deserialize/constraints.jl")
 include("deserialize/ops.jl")
 include("deserialize/graphbuilder.jl")

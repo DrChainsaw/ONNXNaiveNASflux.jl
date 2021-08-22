@@ -21,7 +21,7 @@ function shape(v::AbstractVertex)
 end
 shape(::FluxLayer, outsize) = missing
 shape(::Shape1D, outsize) = (outsize,)
-shape(::FluxDense, outsize) = (outsize, missing)
+shape(::Flux2D, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
 shape(::FluxRecurrent, outsize) = (outsize, missing, missing)
 
@@ -33,9 +33,9 @@ rmdims(t::Tuple, dims) = Tuple(t[i] for i in 1:length(t) if i ∉ dims)
 
 function guess_layertype(ndims::Integer)
     ndims <= 1 && return Shape1D()
-    ndims == 2 && return FluxDense()
-    ndims == 3 && return FluxRnn()
-    return FluxConv{ndims-2}()
+    ndims == 2 && return GenericFlux2D()
+    ndims == 3 && return GenericFluxRecurrent()
+    return GenericFluxConvolutional{ndims-2}()
 end
 
 flipweights(l, w) = w
@@ -59,17 +59,18 @@ function unflipweights(::FluxLstm, w, hsize)
 end
 
 outshape(l, s) = outshape(layertype(l), l, s)
-outshape(::FluxParLayer, l, ::Missing) = outshape(l, shape(layertype(l), nin(l))) 
+outshape(::FluxParLayer, l, ::Missing) = outshape(l, shape(layertype(l), nin(l)[])) 
 outshape(lt, l, ::Missing) = missing
 
-function outshape(::FluxDense, l, s::Tuple) 
+function outshape(::Flux2D, l, s::Tuple) 
     assertshape(s, 2, l)
-    assertsize(s[1], nin(l), l)
+    assertsize(s[1], nin(l)[], l)
     return (nout(l), s[end])
 end
 function outshape(::FluxRecurrent, l, s::Tuple)
+    # l might be a cell and nin/nout in NaiveNASflux is only defined for Flux.Recur{cell}.
     assertshape(s, (3, 4), l)
-    assertsize(s[1], nin(l), l)
+    assertsize(s[1], nin(l)[], l)
     # ONNX wants num directions as an extra dimension to output
     # Fluxs RNNs are not bidirectional so num directions is always 1
     return (nout(l), s[2], 1, s[end])
@@ -77,7 +78,7 @@ end
 
 function outshape(::FluxConvolutional{N}, l, s::Tuple) where N
     assertshape(s, N+2, l)
-    assertsize(s[N+1], nin(l), l)
+    assertsize(s[N+1], nin(l)[], l)
     p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
     k = size(weights(l))[1:N]
     d = l.dilation

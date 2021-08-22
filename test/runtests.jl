@@ -1,4 +1,4 @@
-using ONNXNaiveNASflux
+using ONNXNaiveNASflux, NaiveNASflux, Flux
 import ONNXNaiveNASflux: ONNX
 using Test
 
