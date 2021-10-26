@@ -16,7 +16,7 @@ Model export does not require the model to have any particular format. Almost an
 Pkg.add(url="https://github.com/DrChainsaw/ONNXNaiveNASflux.jl")
 ```
 
-Exporting is done using the `onnx` function which accepts a filename `String` or an `IO` as first argument:
+Exporting is done using the `save` function which accepts a filename `String` or an `IO` as first argument:
 
 ```julia
 # Save model as model.onnx where inputshapes are tuples with sizes of input.
