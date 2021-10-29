@@ -46,6 +46,7 @@
             (op=:Elu, attr = Dict(:alpha => 0.5f0), fd=actfuns),
             (op=:Selu, attr = Dict(), fd=actfuns),
             (op=:Selu, attr = Dict(:alpha => 1.5f0), fd=actfuns),
+            (op=:Tanh, attr = Dict(), fd=actfuns),
             (op=:GlobalAveragePool, attr=Dict(), fd=invariantops),
             (op=:MaxPool, attr=Dict(:kernel_shape=>(1,2), :pads=>(2,1), :strides=>(2,2)), fd=fluxlayers),
             (op=:AveragePool, attr=Dict(:kernel_shape=>(3,2), :pads=>(1,0), :strides=>(2,2)), fd=fluxlayers),
@@ -150,43 +151,50 @@
             @test padexpand(Val(3), (1,2,3,4,5,6)) == [5,3,1,6,4,2]
         end
 
-        @testset "$(tc.layer) node" for tc in (
-            (layer=Dense(3,4, relu), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
-            (layer=Conv((1,2), 3=>4, relu; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 5),
-            (layer=Conv((2,3), 3=>4, relu; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
-            )
+        @testset "Layer with activation function $actfun" for actfun in (
+            relu,
+            elu,
+            selu,
+            tanh,
+        )
+            @testset "$(tc.layer) node" for tc in (
+                (layer=Dense(3,4, actfun), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
+                (layer=Conv((1,2), 3=>4, actfun; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 5),
+                (layer=Conv((2,3), 3=>4, actfun; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
+                )
 
-            inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
+                inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
 
-            outprobe = tc.layer(inprobe)
+                outprobe = tc.layer(inprobe)
 
-            @test length(outprobe.protos) == 4
+                @test length(outprobe.protos) == 4
 
-            wp,bp,lp,ap = Tuple(outprobe.protos)
+                wp,bp,lp,ap = Tuple(outprobe.protos)
 
-            ln = serdeser(lp)
-            an = serdeser(ap)
-            w = serdeser(wp)
-            b = serdeser(bp)
+                ln = serdeser(lp)
+                an = serdeser(ap)
+                w = serdeser(wp)
+                b = serdeser(bp)
 
-            @test size(w) == size(weights(tc.layer))
-            @test size(b) == size(bias(tc.layer))
+                @test size(w) == size(weights(tc.layer))
+                @test size(b) == size(bias(tc.layer))
 
-            @test w ≈ ONNXNaiveNASflux.flipweights(layertype(tc.layer), weights(tc.layer))
-            @test b ≈ bias(tc.layer)
+                @test w ≈ ONNXNaiveNASflux.flipweights(layertype(tc.layer), weights(tc.layer))
+                @test b ≈ bias(tc.layer)
 
-            ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
-            res = fluxlayers[optype(ln)](ln.attribute, w, b)
+                ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
+                res = fluxlayers[optype(ln)](ln.attribute, w, b)
 
-            resout = res(tc.indata)
-            expout = tc.layer(tc.indata)
+                resout = res(tc.indata)
+                expout = tc.layer(tc.indata)
 
-            @test size(resout) == size(expout)
-            @test resout ≈ expout
+                @test size(resout) == size(expout)
+                @test resout ≈ expout
 
-            ortout, = onnxruntime_infer(tc.layer, tc.indata)
-            @test size(ortout) == size(expout)
-            @test ortout ≈ expout
+                ortout, = onnxruntime_infer(tc.layer, tc.indata)
+                @test size(ortout) == size(expout)
+                @test ortout ≈ expout
+            end
         end
 
         @testset "$(tc.layer) node no bias no act" for tc in (
