@@ -1,7 +1,7 @@
 name = "ONNXNaiveNASflux"
 uuid = "2e935253-ba83-4645-9154-13ffeb13a688"
 authors = ["DrChainsaw"]
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
