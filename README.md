@@ -13,7 +13,7 @@ Model export does not require the model to have any particular format. Almost an
 ## Basic usage
 
 ```julia
-Pkg.add(url="https://github.com/DrChainsaw/ONNXNaiveNASflux.jl")
+] add ONNXNaiveNASflux
 ```
 
 Exporting is done using the `save` function which accepts a filename `String` or an `IO` as first argument:
@@ -25,7 +25,7 @@ save("model.onnx", model, inputshapes...)
 # Load model as a CompGraph
 graph = load("model.onnx", inputshapes...)
 ```
-Input shapes can be omitted in which case an attempt to infer the shapes will be made. If supplied, one tuple with size as the dimensions of the corresponding input array (including batch dimension) is expected. 
+Input shapes can be omitted in which case an attempt to infer the shapes will be made. If supplied, one tuple with size as the dimensions of the corresponding input the Julia model (including batch dimension) is expected. For example, if `model` expects an array of size `(s1, s2, s3)` then `(s1, s2, s3)` shall be given as `inputshapes` to both `save` and `load`.    
 
 Elements of input shape tuples can have one of the following types:
 * `Integer`: The size of the corresponding dimension
