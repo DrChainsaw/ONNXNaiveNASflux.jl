@@ -1,28 +1,15 @@
 
-using PyCall
-using Conda
-
-
+import ONNXRunTime
 function onnxruntime_infer(f, inputs...)
-	if "onnxruntime" ∉ Conda._installed_packages() || Conda._installed_packages_dict()["onnxruntime"][1] !== v"1.8.1"
-		# TODO: Add some kind of warning if an incompatible default python installation is used due to ENV["PYTHON"] not being set to ""
-		Conda.pip_interop(true)
-		Conda.pip("install --no-warn-script-location", "onnxruntime==1.8.1")
+
+	reversedims(a::AbstractArray{T,N}) where {T, N} = permutedims(a, N:-1:1)
+	
+	mktempdir() do dir
+		modelfile = joinpath(dir, "model.onnx")
+		save(modelfile, f, size.(inputs)...)
+
+		model = ONNXRunTime.load_inference(modelfile)
+		return model(Dict(ONNXRunTime.input_names(model) .=> reversedims.(inputs))) |> values .|> reversedims |> Tuple
 	end
 
-	modfile = "tmpmodel.onnx"
-	try
-		save(modfile, f, size.(inputs)...)
-
-		ort = pyimport("onnxruntime")
-		sess = ort.InferenceSession(modfile);
-		ins = Dict(map(ii -> ii.name, sess.get_inputs()) .=> PyReverseDims.(inputs))
-		return JuReverseDims.(Tuple(sess.run(nothing, ins)))
-	finally
-		rm(modfile; force=true)
-	end
 end
-
-JuReverseDims(a::PyObject) = JuReverseDims(PyArray(a))
-JuReverseDims(a::PyArray) = JuReverseDims(Array(a))
-JuReverseDims(a::AbstractArray{T,N}) where {T, N} = permutedims(a, N:-1:1)
