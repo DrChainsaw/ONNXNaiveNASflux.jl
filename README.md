@@ -80,6 +80,7 @@ BatchNormalization
 Concat
 Constant
 Conv
+Div
 Dropout
 Elu
 Flatten

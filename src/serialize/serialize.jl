@@ -432,6 +432,7 @@ end
 
 gen_broadcastable_elemwise(+, "Add")
 gen_broadcastable_elemwise(*, "Mul")
+gen_broadcastable_elemwise(/, "Div")
 
 function elemwisefun(optype, args...)
     # This mess is only to make sure we first draw the name of the op so that any constants base their name of it

@@ -82,6 +82,9 @@ git-tree-sha1 = "8be97aa969ebdbe7599798d511a7790eba0697f2"
 [test_conv_with_strides_padding]
 git-tree-sha1 = "41eca620fb09f7d90ec9b875a80388566baadada"
 
+[test_div]
+git-tree-sha1 = "430fd9135e60076904f717971bd174b0f16e1c54"
+
 [test_dropout_default]
 git-tree-sha1 = "70fe420142b8d29b708578e4b6f2929e6907cb4c"
 

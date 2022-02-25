@@ -257,7 +257,7 @@ end
 
 verts[:Add] = (name, inputs, params; kwargs...) -> elemwisevertex(name, inputs, params, +, 0; kwargs...)
 verts[:Mul] = (name, inputs, params; kwargs...) -> elemwisevertex(name, inputs, params, *, 1; kwargs...)
-
+verts[:Div] = (name, inputs, params; kwargs...) -> elemwisevertex(name, inputs, params, /, 1; kwargs...)
 
 function elemwisevertex(name, inputs, params, op, id; traitdecoration=identity, layerfun=identity, kwargs...)
     c = reduce((c1,c2) -> op.(c1, c2), get(params, :Constant, id))

@@ -151,6 +151,7 @@ innames(::Val, n::ONNX.NodeProto) = input(n)[1:min(1, length(input(n)))]
 innames(::Val{:Input}, ::ONNX.NodeProto) = []
 innames(::Val{:Add}, n::ONNX.NodeProto) = input(n)
 innames(::Val{:Mul}, n::ONNX.NodeProto) = input(n)
+innames(::Val{:Div}, n::ONNX.NodeProto) = input(n)
 innames(::Val{:Concat}, n::ONNX.NodeProto) = input(n)
 
 input(n::ONNX.NodeProto) = n.input

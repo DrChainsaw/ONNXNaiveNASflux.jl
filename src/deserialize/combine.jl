@@ -30,6 +30,7 @@ function optrait(vot::Val{ot}, n::OnnxNode) where ot
 end
 optrait(::Val{:Mul}, ::OnnxNode) = ElemwiseOp()
 optrait(::Val{:Add}, ::OnnxNode) = ElemwiseOp()
+optrait(::Val{:Div}, ::OnnxNode) = ElemwiseOp()
 
 retnode(n, gb) = n, innodes(n, gb)
 check_combine(x, n::OnnxNode, gb::CompGraphBuilder) = retnode(n, gb)
