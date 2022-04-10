@@ -50,7 +50,7 @@ function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T
     # ONNX shape for RNNs inputs is [seq_length, batch_size, input_size]
     # ONNX.jl reverses this to [input_size, batch_size, seq_length]
     # Unstacking it to a sequence of [input_size, batch_size]
-    inseq =Flux.unstack(x, 3)
+    inseq =Flux.unstack(x;dims=3)
     out = nothing
     for inpt in inseq
          out = l(inpt)

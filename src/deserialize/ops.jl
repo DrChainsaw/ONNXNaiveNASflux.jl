@@ -82,12 +82,12 @@ a2t(a::AbstractArray) = Tuple(a)
 
 actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=false) where {T, N}
     a,_,p,s,d = akpsd(params)
-    @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
+    @assert get(params, :group, 1) == 1 "Group size not supported!" # TODO
     return Conv(flipweights(FluxConv{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
 end
 fluxlayertypes[:Conv] = (weight, bias=nothing) -> FluxConv{length(size(weight))-2}()
 
-biasarray(b::Flux.Zeros, esize, β) = b
+biasarray(b::Number, esize, β) = b
 biasarray(b::AbstractArray, esize, β) = length(b) === 1 ? repeat(β .* vec(b), esize) : β .* reshape(b, :)
 biasarray(b::Number, esize, β) = repeat([β * b], esize)
 
@@ -156,7 +156,7 @@ function recurrent_arrays(lt, Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     hsize = size(Wh_WBh, 1)
     Wi = unflipweights(lt, permutedims(dropdims(Wi_WBi, dims=3)), hsize)
     Wh = unflipweights(lt, permutedims(dropdims(Wh_WBh, dims=3)), hsize)
-    b = Wb_Rb isa Flux.Zeros ? Wb_Rb : dropdims(unflipweights(lt, sum(reshape(Wb_Rb, :, 2), dims=2), hsize),dims=2)
+    b = Wb_Rb isa Number ? Wb_Rb : dropdims(unflipweights(lt, sum(reshape(Wb_Rb, :, 2), dims=2), hsize),dims=2)
     return Wi, Wh, b, h3ds...
 end
 

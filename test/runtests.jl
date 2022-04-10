@@ -1,4 +1,5 @@
 using ONNXNaiveNASflux, NaiveNASflux, Flux
+using Flux: params
 import ONNXNaiveNASflux: ONNX
 using Test
 

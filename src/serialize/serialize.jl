@@ -249,7 +249,10 @@ function addbias!(lt, pp, b, name, inputnames)
     add!(pp, ONNX.TensorProto(b, name))
     return vcat(inputnames, name)
 end
-addbias!(lt, pp, ::Flux.Zeros, name, inputnames) = inputnames
+function addbias!(lt, pp, bparam::Number, name, inputnames) 
+    @assert bparam == false "ONNX model with bias term $bparam not supported!"
+    return inputnames
+end
 
 function(l::Flux.Dense)(pp::AbstractProbe)
     ppl = pp
@@ -323,7 +326,7 @@ function recurrent_node(l, pp, optype)
     Wh = permutedims(flipweights(layertype(l), l.Wh, hsize))
     add!(pp, ONNX.TensorProto(reshape(Wh, size(Wh)..., 1), rname))
 
-    if !isa(l.b, Flux.Zeros)
+    if !isa(l.b, Number)
         # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
         # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
         b = flipweights(layertype(l), reshape(l.b, :, 1), hsize)
