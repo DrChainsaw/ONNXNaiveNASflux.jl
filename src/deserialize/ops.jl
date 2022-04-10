@@ -38,6 +38,12 @@ const fluxlayertypes = Dict{Symbol, Any}()
 
 # Functions which have dedicated vertex construction methods, such as Concat and Add end up in verts.
 
+struct OpNotSupportedError <: Exception
+    msg::String
+end
+OpNotSupportedError(op_type::Symbol) = OpNotSupportedError(string("Operation type ", op_type, " not supported!"))
+Base.showerror(io::IO, e::OpNotSupportedError) = print(io, "OpNotSupportedError: ", e.msg)
+
 sources[:Constant] = params -> constant(Val.(keys(params))..., values(params)...)
 constant(::Val{:value}, val::ONNX.TensorProto) = val |> array
 constant(::Val{:value}, val) = val
@@ -74,7 +80,7 @@ akpsd(params) = a2t.(_akpsd(params))
 a2t(x) = x
 a2t(a::AbstractArray) = Tuple(a)
 
-actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros()) where {T, N}
+actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=false) where {T, N}
     a,_,p,s,d = akpsd(params)
     @assert get(params, :group, 1) == 1 "Group size not supported!" #Or?
     return Conv(flipweights(FluxConv{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
@@ -85,7 +91,7 @@ biasarray(b::Flux.Zeros, esize, β) = b
 biasarray(b::AbstractArray, esize, β) = length(b) === 1 ? repeat(β .* vec(b), esize) : β .* reshape(b, :)
 biasarray(b::Number, esize, β) = repeat([β * b], esize)
 
-actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros()) where {T,N}
+actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=false) where {T,N}
     act = get(params, :activation, identity)
     wt = Bool(get(params, :transB, 0)) ? permutedims : identity
     α = get(params, :alpha, 1)
@@ -94,10 +100,9 @@ actlayers[:Gemm] = function(params, weight::AbstractArray{T, N}, bias=Flux.Zeros
     weight = α .* wt(weight)
     bias = biasarray(bias, size(weight, 1), β)
 
-    return Dense(weight , bias, act)
+    return Dense(weight, bias, act)
 end
 fluxlayertypes[:Gemm] = (pars...) -> FluxDense()
-
 
 actlayers[:BatchNormalization] = function(params, γ, β, μ, σ²)
     λ = get(params, :activation, identity)
@@ -275,6 +280,11 @@ verts[:Concat] = function(name, inputs, params; traitdecoration=identity, layerf
     return conc(inputs..., dims=dims, traitdecoration = named(name) ∘ traitdecoration, outwrap=layerfun, kwargs...)
 end
 
+# Without parameters it needs its own type as well as constraints for propagation of size changes
+matmul_op(name, inputs::AbstractVector{<:AbstractVertex}, params::AbstractDict; kwargs...) = throw(OpNotSupportedError("MatMul without parameter not supported!"))
+matmul_op(name, inputs::AbstractVector{<:AbstractVertex}, params::AbstractDict, weight; kwargs...) = fluxvertex(name, Dense(weight, false, identity), inputs...; kwargs...)
+
+verts[:MatMul] = matmul_op
 
 function refresh()
     for (s, f) in actlayers

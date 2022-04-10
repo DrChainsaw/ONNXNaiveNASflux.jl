@@ -88,6 +88,7 @@ Gemm
 GlobalAveragePool
 GlobalMaxPool
 LSTM
+MatMul
 MaxPool
 Mul
 RNN

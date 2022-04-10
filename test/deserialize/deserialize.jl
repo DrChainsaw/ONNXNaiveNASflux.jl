@@ -199,7 +199,7 @@ end
     (name="test_softmax_large_number", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_softmax_negative_axis", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze", ninputs=1, noutputs=1, fd=invariantops),
-    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops)
+    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
@@ -245,6 +245,7 @@ end
     (name="test_concat_3d_axis_negative_1", ninputs=2, noutputs=1),
     (name="test_concat_3d_axis_negative_2", ninputs=2, noutputs=1),
     (name="test_concat_3d_axis_negative_3", ninputs=2, noutputs=1),
+    (name="test_matmul_2d", ninputs=2, noutputs=1),
     (name="test_mul", ninputs=2, noutputs=1),
     )
 

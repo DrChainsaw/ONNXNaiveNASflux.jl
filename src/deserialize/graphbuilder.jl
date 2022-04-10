@@ -54,7 +54,9 @@ function output_to_node(nodes, initdict)
    allnodes = Dict{String, OnnxNode}()
    for nodeproto in nodes
       # Past this point we get hard to interpret errors if optype is not supported
-      @assert optype(nodeproto) in keys(verts) "Optype $(optype(nodeproto)) not supported!"
+      if optype(nodeproto) ∉ keys(verts) 
+         throw(OpNotSupportedError(optype(nodeproto)))
+      end
       ps = params(nodeproto, initdict)
       node = OnnxNode(nodeproto, ps)
       for outname in output(node)
@@ -145,6 +147,14 @@ fix_invalid_insize(insize::Integer, node_to_lt) = insize > 0 ? shape(last(node_t
 fluxlayer_nin(node::OnnxNode) = fluxlayers[optype(node)](node.attribute, params(node)...) |> nin |> first
 
 nodes(gb::CompGraphBuilder) = values(gb.allnodes)
+
+# This design is not good! 
+# innames are supposed to give the names of other nodes in the graph which are input (as opposed to input which in Flux layers is considered parameters).
+# Here we kind of hardcode per OpType which inputs we expect are parameters (or else you typically can't make a Flux layer out of it).
+# Can't we just filter out names which are part of initializers? Perhaps one also need to
+# propagate constants eventually, but this is anyways not supported in other parts.
+# If it turns out that this can't be made into a Flux layer we can just throw a more sensible
+# exception later
 innames(n::OnnxNode) = innames(n.proto)
 innames(n::ONNX.NodeProto) = innames(Val(optype(n)), n)
 innames(::Val, n::ONNX.NodeProto) = input(n)[1:min(1, length(input(n)))]
@@ -153,6 +163,7 @@ innames(::Val{:Add}, n::ONNX.NodeProto) = input(n)
 innames(::Val{:Mul}, n::ONNX.NodeProto) = input(n)
 innames(::Val{:Div}, n::ONNX.NodeProto) = input(n)
 innames(::Val{:Concat}, n::ONNX.NodeProto) = input(n)
+innames(::Val{:MatMul}, n::ONNX.NodeProto) = input(n)[1:1]
 
 input(n::ONNX.NodeProto) = n.input
 input(n::OnnxNode) = input(n.proto)
