@@ -80,6 +80,7 @@ BatchNormalization
 Concat
 Constant
 Conv
+Div
 Dropout
 Elu
 Flatten
@@ -87,6 +88,7 @@ Gemm
 GlobalAveragePool
 GlobalMaxPool
 LSTM
+MatMul
 MaxPool
 Mul
 RNN

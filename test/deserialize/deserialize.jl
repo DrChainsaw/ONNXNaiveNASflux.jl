@@ -50,7 +50,7 @@ function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T
     # ONNX shape for RNNs inputs is [seq_length, batch_size, input_size]
     # ONNX.jl reverses this to [input_size, batch_size, seq_length]
     # Unstacking it to a sequence of [input_size, batch_size]
-    inseq =Flux.unstack(x, 3)
+    inseq =Flux.unstack(x;dims=3)
     out = nothing
     for inpt in inseq
          out = l(inpt)
@@ -199,7 +199,7 @@ end
     (name="test_softmax_large_number", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_softmax_negative_axis", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze", ninputs=1, noutputs=1, fd=invariantops),
-    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops)
+    (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
@@ -231,6 +231,7 @@ end
 @testset "Vertex $(tc.name)" for tc in
     (
     (name="test_add", ninputs=2, noutputs=1),
+    (name="test_div", ninputs=2, noutputs=1),
     #(name="test_add_bcast", ninputs=2, noutputs=1), # Op is supported, but we get the wrong idea about what type of inputvertex to create from 3D input
     (name="test_concat_1d_axis_0", ninputs=2, noutputs=1),
     (name="test_concat_1d_axis_negative_1", ninputs=2, noutputs=1),
@@ -244,6 +245,7 @@ end
     (name="test_concat_3d_axis_negative_1", ninputs=2, noutputs=1),
     (name="test_concat_3d_axis_negative_2", ninputs=2, noutputs=1),
     (name="test_concat_3d_axis_negative_3", ninputs=2, noutputs=1),
+    (name="test_matmul_2d", ninputs=2, noutputs=1),
     (name="test_mul", ninputs=2, noutputs=1),
     )
 

@@ -5,6 +5,7 @@ include("baseonnx/BaseOnnx.jl")
 import .BaseOnnx: array
 const ONNX = BaseOnnx
 using Flux
+using Flux: params
 using NaiveNASflux
 using NaiveNASflux: weights, bias
 using NaiveNASflux: indim, outdim, actdim, actrank, layertype, wrapped

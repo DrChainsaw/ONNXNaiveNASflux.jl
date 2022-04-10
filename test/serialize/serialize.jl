@@ -198,8 +198,8 @@
         end
 
         @testset "$(tc.layer) node no bias no act" for tc in (
-            (layer=Dense(randn(Float32, 2,3), Flux.Zeros()), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
-            (layer=Conv((1,1), 2=>3; bias=Flux.Zeros(3)), indata=reshape(collect(Float32, 1:2*3), 1,1,2,3) .- 3),
+            (layer=Dense(randn(Float32, 2,3), false), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
+            (layer=Conv((1,1), 2=>3; bias=false), indata=reshape(collect(Float32, 1:2*3), 1,1,2,3) .- 3),
             )
 
             inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
@@ -693,8 +693,8 @@
 
             indata = reshape(collect(Float32, 1:3*5*7), 3,5,7)
 
-            expout = g_org.(Flux.unstack(indata, 3))
-            resout = g_new.(Flux.unstack(indata, 3))
+            expout = g_org.(Flux.unstack(indata; dims=3))
+            resout = g_new.(Flux.unstack(indata; dims=3))
 
             @test size.(expout) == size.(resout)
             @test expout ≈ resout
