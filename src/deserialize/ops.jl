@@ -87,7 +87,7 @@ actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=false) whe
 end
 fluxlayertypes[:Conv] = (weight, bias=nothing) -> FluxConv{length(size(weight))-2}()
 
-biasarray(b::Number, esize, β) = b
+biasarray(b::Bool, esize, β) = b
 biasarray(b::AbstractArray, esize, β) = length(b) === 1 ? repeat(β .* vec(b), esize) : β .* reshape(b, :)
 biasarray(b::Number, esize, β) = repeat([β * b], esize)
 
