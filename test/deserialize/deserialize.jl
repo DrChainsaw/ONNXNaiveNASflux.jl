@@ -387,7 +387,7 @@ end
     @testset "Flatten$label" for (label, layerfun, exputilsize) in 
         (
         ("", identity, 1),
-        ("with ActivationContribution", ActivationContribution, 60),
+        (" with ActivationContribution", ActivationContribution, 60),
         )
         using ONNXNaiveNASflux: Flatten, create_vertex_default, defaultutility
 
