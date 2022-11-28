@@ -1,4 +1,4 @@
-import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes
+import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes, array
 using ONNXNaiveNASflux.NaiveNASflux
 
 # Logging to avoid CI timeouts
@@ -142,6 +142,8 @@ end
     (name="test_selu", ninputs=1, noutputs=1),
     (name="test_selu_default", ninputs=1, noutputs=1),
     (name="test_selu_example", ninputs=1, noutputs=1),
+    (name="test_sigmoid", ninputs=1, noutputs=1),
+    (name="test_sigmoid_example", ninputs=1, noutputs=1),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)

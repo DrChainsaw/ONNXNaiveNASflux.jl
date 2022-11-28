@@ -46,6 +46,7 @@
             (op=:Elu, attr = Dict(:alpha => 0.5f0), fd=actfuns),
             (op=:Selu, attr = Dict(), fd=actfuns),
             (op=:Selu, attr = Dict(:alpha => 1.5f0), fd=actfuns),
+            (op=:Sigmoid, attr = Dict(), fd=actfuns),
             (op=:Tanh, attr = Dict(), fd=actfuns),
             (op=:GlobalAveragePool, attr=Dict(), fd=invariantops),
             (op=:MaxPool, attr=Dict(:kernel_shape=>(1,2), :pads=>(2,1), :strides=>(2,2)), fd=fluxlayers),

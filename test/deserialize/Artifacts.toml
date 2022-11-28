@@ -268,6 +268,12 @@ git-tree-sha1 = "44c37442a35def50d4e1230cdcff8a986899d18d"
 [test_selu_example]
 git-tree-sha1 = "dc4a6180985e796aca6997ae79137fee6f9c05e9"
 
+[test_sigmoid]
+git-tree-sha1 = "2bb16571d0809d1e6216a1b6eb5b27d332fac4f0"
+
+[test_sigmoid_example]
+git-tree-sha1 = "710a8b85b3a7e9e301af21f8f1c0e7b087536ba5"
+
 [test_softmax_axis_0]
 git-tree-sha1 = "4f090b0b0f540b5f133176e4cf8a118c24db1886"
 

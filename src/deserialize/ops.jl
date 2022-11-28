@@ -49,6 +49,7 @@ constant(::Val{:value}, val::ONNX.TensorProto) = val |> array
 constant(::Val{:value}, val) = val
 
 actfuns[:Relu] = params -> Flux.relu
+actfuns[:Sigmoid] = params -> Flux.σ
 
 actfuns[:Elu] = function(params)
     α = get(params, :alpha, 1)

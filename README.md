@@ -96,6 +96,7 @@ ReduceMean
 Relu
 Reshape
 Selu
+Sigmoid
 Softmax
 Squeeze
 Tanh
