@@ -1,7 +1,6 @@
 # ONNXNaiveNASflux
 
 [![Build status](https://github.com/DrChainsaw/ONNXNaiveNASflux.jl/workflows/CI/badge.svg?branch=master)](https://github.com/DrChainsaw/ONNXNaiveNASflux.jl/actions)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/DrChainsaw/ONNXNaiveNASflux.jl?svg=true)](https://ci.appveyor.com/project/DrChainsaw/ONNXNaiveNASflux-jl)
 [![Codecov](https://codecov.io/gh/DrChainsaw/ONNXNaiveNASflux.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/DrChainsaw/ONNXNaiveNASflux.jl)
 
 [ONNX](https://onnx.ai) import and export for [Flux](https://github.com/FluxML/Flux.jl).
