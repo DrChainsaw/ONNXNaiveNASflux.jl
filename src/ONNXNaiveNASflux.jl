@@ -15,6 +15,7 @@ using NaiveNASflux: FluxLayer, FluxParLayer, FluxNoParLayer, FluxDense, FluxConv
 using Setfield
 using Statistics
 import Pkg
+import ChainRulesCore
 import JuMP: @variable, @constraint
 using NaiveNASlib.Extend, NaiveNASlib.Advanced
 using NaiveNASlib: compconstraint!, all_in_Δsize_graph, NamedTrait, VertexConf
