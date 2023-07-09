@@ -169,6 +169,15 @@ git-tree-sha1 = "377710458916cc790bb7eec00c8e3f0719680cf8"
 [test_globalmaxpool_precomputed]
 git-tree-sha1 = "6d72b58370176351d46937ca3df65ba2fd114f04"
 
+[test_leakyrelu]
+git-tree-sha1 = "07afe319b71db2cb6bc295ff9409482721473817"
+
+[test_leakyrelu_default]
+git-tree-sha1 = "2751dbd14e5feaf6c59798e84ae9e7d9700240b6"
+
+[test_leakyrelu_example]
+git-tree-sha1 = "b7e814cb5b5d6d538db1d6af49c02b786cb0036e"
+
 [test_lstm_defaults]
 git-tree-sha1 = "c8b0d06dc9733222906bb6471c39a9c41270d149"
 

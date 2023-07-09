@@ -42,6 +42,8 @@
 
         @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
             (op=:Relu, attr = Dict(), fd=actfuns),
+            (op=:LeakyRelu, attr = Dict(), fd=actfuns),
+            (op=:LeakyRelu, attr = Dict(:alpha => 0.05f0), fd=actfuns),
             (op=:Elu, attr = Dict(), fd=actfuns),
             (op=:Elu, attr = Dict(:alpha => 0.5f0), fd=actfuns),
             (op=:Selu, attr = Dict(), fd=actfuns),
@@ -154,6 +156,7 @@
 
         @testset "Layer with activation function $actfun" for actfun in (
             relu,
+            leakyrelu,
             elu,
             selu,
             tanh,

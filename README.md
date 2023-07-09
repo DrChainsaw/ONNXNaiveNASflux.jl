@@ -87,6 +87,7 @@ Gemm
 GlobalAveragePool
 GlobalMaxPool
 LSTM
+LeakyRelu
 MatMul
 MaxPool
 Mul
