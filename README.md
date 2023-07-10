@@ -86,6 +86,7 @@ Flatten
 Gemm
 GlobalAveragePool
 GlobalMaxPool
+InstanceNormalization
 LSTM
 LeakyRelu
 MatMul

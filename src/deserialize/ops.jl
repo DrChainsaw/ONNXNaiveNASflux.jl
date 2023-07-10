@@ -125,6 +125,19 @@ default_Wb_Rb(Wh_WBh) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) * 2, size(Wh_WBh,
 default_init_h(Wb_Rb, sc) = fill!(similar(Wb_Rb, (size(Wb_Rb,1) ÷ sc, size(Wb_Rb,2))), 0)
 # TODO when https://github.com/FluxML/Flux.jl/issues/1279 is resolved default_init_h(Wh_WBh, sc) = fill!(similar(Wh_WBh, (size(Wh_WBh, 2) ÷ sc, size(Wh_WBh, 3))), 0)
 
+actlayers[:InstanceNormalization] = function(params, γ, β)
+    λ = get(params, :activation, identity)
+    ϵ = get(params, :epsilon, 1f-5)
+
+    # ONNX InstanceNormalization does not support tracking μ and σ²
+    momentum = NaN32
+    μ = zeros(length(γ))
+    σ² = ones(length(γ))
+
+    return InstanceNorm(λ, β, γ, μ, σ², ϵ, momentum, true, false, nothing, length(γ))
+end
+fluxlayertypes[:InstanceNormalization] = (pars...) -> FluxInstanceNorm()
+
 fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
 

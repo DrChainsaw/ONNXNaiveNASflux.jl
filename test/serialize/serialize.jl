@@ -311,6 +311,39 @@
             @test size(ortout) == size(expout)
             @test ortout ≈ expout
         end
+
+        @testset "$(tc.layer) node" for tc in (
+            (layer=InstanceNorm(3, relu, affine=true), indata=reshape(collect(Float32, 1:2*3*3), 2,3,3,1) .- 10),
+            (layer=InstanceNorm(3, relu, initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), affine=true, track_stats=false, eps=1f-3), indata=reshape(collect(Float32, 1:2*3*3), 2,3,3,1) .- 10),
+            )
+
+            inprobe = NodeProbe("input", genname)
+            outprobe = tc.layer(inprobe)
+            @test length(outprobe.protos) == 4
+
+            ln, γ, β, an = Tuple(serdeser.(outprobe.protos))
+
+            @test size(β) == size(tc.layer.β)
+            @test size(γ) == size(tc.layer.γ)
+
+            @test β ≈ tc.layer.β
+            @test γ ≈ tc.layer.γ
+
+            ln.attribute[:activation] = actfuns[Symbol(optype(an))](an.attribute)
+            res = fluxlayers[optype(ln)](ln.attribute, γ, β)
+
+            @test string(res) == string(tc.layer)
+
+            resout = res(tc.indata)
+            expout = tc.layer(tc.indata)
+
+            @test size(resout) == size(expout)
+            @test resout ≈ expout
+
+            ortout, = onnxruntime_infer(tc.layer, tc.indata)
+            @test size(ortout) == size(expout)
+            @test ortout ≈ expout
+        end
     end
 
     @testset "Graphs" begin

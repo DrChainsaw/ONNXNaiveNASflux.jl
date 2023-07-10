@@ -299,6 +299,28 @@ function(l::Flux.BatchNorm)(pp::AbstractProbe)
 end
 actfun(::FluxBatchNorm, l) = l.λ
 
+function(l::Flux.InstanceNorm)(pp::AbstractProbe)
+    @assert l.affine == true "ONNX InstanceNormalization does not support affine=false"
+    @assert l.track_stats == false "ONNX InstanceNormalization does not support track_stats=true"
+    lname = recursename(l, nextname(pp))
+    γname, βname = lname .* ("_scale", "_bias")
+
+    add!(pp, ONNX.NodeProto(
+        input=[name(pp), γname, βname],
+        output=[lname],
+        name=lname,
+        attribute = ONNX.AttributeProto.(["epsilon"], [l.ϵ]),
+        op_type="InstanceNormalization"))
+
+    add!(pp, ONNX.TensorProto(l.γ, γname))
+    add!(pp, ONNX.TensorProto(l.β, βname))
+
+
+    ppout = actfun(layertype(l), l)(newnamestrat(pp, f -> join([lname, genname(f)], "_"), lname))
+    return newnamestrat(ppout, nextname(pp))
+end
+actfun(::FluxInstanceNorm, l) = l.λ
+
 
 # Dropdims because ONNX expects recurrent layers to output tensors of shape [seq_length, num_directions, batch_size, hidden_size] where num_directions is 2 in case of bidirectional and 1 otherwise
 # Flux.Recur is not bidirectional so we'll just assume the user wants to also drop num_directions so that recurrent layers can be stacked without hassle.
