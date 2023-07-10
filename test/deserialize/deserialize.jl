@@ -77,6 +77,14 @@ end
     (name="test_conv_with_strides_and_asymmetric_padding", ninputs=2, noutputs=1),
     (name="test_conv_with_strides_no_padding", ninputs=2, noutputs=1),
     (name="test_conv_with_strides_padding", ninputs=2, noutputs=1),
+    (name="test_convtranspose", ninputs=2, noutputs=1),
+    (name="test_convtranspose_1d", ninputs=2, noutputs=1),
+    (name="test_convtranspose_dilations", ninputs=2, noutputs=1),
+    #(name="test_convtranspose_kernel_shape", ninputs=2, noutputs=1), Not supported!
+    #(name="test_convtranspose_output_shape", ninputs=2, noutputs=1), Not supported!
+    #(name="test_convtranspose_pad", ninputs=2, noutputs=1), Not supported!
+    (name="test_convtranspose_pads", ninputs=2, noutputs=1),
+    #(name="test_convtranspose_with_kernel", ninputs=2, noutputs=1), Not supported!
     (name="test_dropout_default", ninputs=1, noutputs=1),
     (name="test_dropout_random", ninputs=1, noutputs=1),
     #(name="test_gemm_all_attributes", ninputs=3, noutputs=1), Not supported!

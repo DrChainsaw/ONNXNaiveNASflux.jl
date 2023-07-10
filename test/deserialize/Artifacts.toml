@@ -82,6 +82,30 @@ git-tree-sha1 = "8be97aa969ebdbe7599798d511a7790eba0697f2"
 [test_conv_with_strides_padding]
 git-tree-sha1 = "41eca620fb09f7d90ec9b875a80388566baadada"
 
+[test_convtranspose]
+git-tree-sha1 = "941508204a2655148ca271b54790c27911fbc8f8"
+
+[test_convtranspose_1d]
+git-tree-sha1 = "c62ef0df9eed662b0f673def672291e2b883d9bf"
+
+[test_convtranspose_dilations]
+git-tree-sha1 = "11ef17d087338b3c98100b62cbe5f387a7b9b026"
+
+[test_convtranspose_kernel_shape]
+git-tree-sha1 = "216fb10bf7fa2f66e8da0913a4919910bd6723d8"
+
+[test_convtranspose_output_shape]
+git-tree-sha1 = "c2c636fc9333cfeb706761d015fd49634c710dc6"
+
+[test_convtranspose_pad]
+git-tree-sha1 = "bcfa9e154fc3b4b9bb396586a753de36d17cac59"
+
+[test_convtranspose_pads]
+git-tree-sha1 = "2b996154c62040de848d2fbc83e551651e1fbd67"
+
+[test_convtranspose_with_kernel]
+git-tree-sha1 = "7e2ea896245f3f90dae5dec81289b75f198bb07b"
+
 [test_div]
 git-tree-sha1 = "57dd66f7274aac0e2a462e49dadf5a551c4e5e80"
 

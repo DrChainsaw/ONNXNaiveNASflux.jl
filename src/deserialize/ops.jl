@@ -94,6 +94,21 @@ actlayers[:Conv] = function(params, weight::AbstractArray{T, N}, bias=false) whe
 end
 fluxlayertypes[:Conv] = (weight, bias=nothing) -> FluxConv{length(size(weight))-2}()
 
+actlayers[:ConvTranspose] = function(params, weight::AbstractArray{T, N}, bias=false) where {T, N}
+    a,_,p,s,d = akpsd(params)
+
+    for (k,v) in pairs(params)
+        println(k, ":    ", v)
+    end
+    
+    @assert get(params, :group, 1) == 1 "Group size not supported!" # TODO
+    @assert !haskey(params, :output_shape) "ConvTranspose: output_shape not supported"
+    @assert !haskey(params, :output_padding) "ConvTranspose: output_padding not supported"
+
+    return ConvTranspose(flipweights(FluxConvTranspose{N-2}(), weight), bias, a, pad=p, stride=s, dilation=d)
+end
+fluxlayertypes[:ConvTranspose] = (weight, bias=nothing) -> FluxConvTranspose{length(size(weight))-2}()
+
 biasarray(b::Bool, esize, β) = b
 biasarray(b::AbstractArray, esize, β) = length(b) === 1 ? repeat(β .* vec(b), esize) : β .* reshape(b, :)
 biasarray(b::Number, esize, β) = repeat([β * b], esize)
