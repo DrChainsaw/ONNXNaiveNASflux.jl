@@ -277,7 +277,7 @@
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), ϵ=1e-3, momentum = 0.78), indata=reshape(collect(Float32, 1:2*3*3), 2,3,3,1) .- 10),
+            (layer=BatchNorm(3, relu; initβ = i -> collect(Float32, 1:i), initγ = i -> collect(Float32, i:-1:1), eps=1e-3, momentum = 0.78), indata=reshape(collect(Float32, 1:2*3*3), 2,3,3,1) .- 10),
             )
 
             inprobe = NodeProbe("input", genname)
