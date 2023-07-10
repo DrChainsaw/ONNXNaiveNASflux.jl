@@ -51,6 +51,12 @@ constant(::Val{:value}, val) = val
 actfuns[:Relu] = params -> Flux.relu
 actfuns[:Sigmoid] = params -> Flux.σ
 
+actfuns[:LeakyRelu] = function(params)
+    α = get(params, :alpha, 0.01f0)
+    return x -> Flux.leakyrelu(x, oftype(x, α))
+end
+rnnactfuns[:LeakyRelu] = (ind, params) -> actfuns[:LeakyRelu](Dict(:alpha => get(params, :activation_alpha, ntuple(i -> 0.01f0, ind))[ind]))
+
 actfuns[:Elu] = function(params)
     α = get(params, :alpha, 1)
     return x -> Flux.elu(x, oftype(x, α))
