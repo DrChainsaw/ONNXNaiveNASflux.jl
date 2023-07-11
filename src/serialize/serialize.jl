@@ -270,6 +270,7 @@ function(l::Flux.Dense)(pp::AbstractProbe)
 end
 
 (l::Flux.Conv)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "Conv"; attributes = attribs(l))
+(l::Flux.ConvTranspose)(pp::AbstractProbe) = weightlayer(layertype(l), l, pp, "ConvTranspose"; attributes = attribs(l))
 
 attribs(l) = attribs(layertype(l), l)
 attribs(::FluxConvolutional{N}, l) where N = ONNX.AttributeProto.([ "pads", "strides", "dilations"], [padexpand(Val(N), l.pad), reverse(l.stride), reverse(l.dilation)])
