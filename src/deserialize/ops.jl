@@ -97,10 +97,6 @@ fluxlayertypes[:Conv] = (weight, bias=nothing) -> FluxConv{length(size(weight))-
 actlayers[:ConvTranspose] = function(params, weight::AbstractArray{T, N}, bias=false) where {T, N}
     a,_,p,s,d = akpsd(params)
 
-    for (k,v) in pairs(params)
-        println(k, ":    ", v)
-    end
-    
     @assert get(params, :group, 1) == 1 "Group size not supported!" # TODO
     @assert !haskey(params, :output_shape) "ConvTranspose: output_shape not supported"
     @assert !haskey(params, :output_padding) "ConvTranspose: output_padding not supported"
