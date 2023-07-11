@@ -99,6 +99,8 @@ end
     (name="test_gemm_default_zero_bias", ninputs=3, noutputs=1),
     #(name="test_gemm_transposeA", ninputs=3, noutputs=1), Not supported!
     (name="test_gemm_transposeB", ninputs=3, noutputs=1),
+    (name="test_instancenorm_epsilon", ninputs=3, noutputs=1),
+    (name="test_instancenorm_example", ninputs=3, noutputs=1),
     (name="test_lstm_defaults", ninputs=3, noutputs=1),
     (name="test_lstm_with_initial_bias", ninputs=4, noutputs=1),
     # (name="test_lstm_with_peepholes", ninputs=8, noutputs=1), Not supported!

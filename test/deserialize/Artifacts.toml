@@ -196,6 +196,12 @@ git-tree-sha1 = "377710458916cc790bb7eec00c8e3f0719680cf8"
 [test_globalmaxpool_precomputed]
 git-tree-sha1 = "6d72b58370176351d46937ca3df65ba2fd114f04"
 
+[test_instancenorm_epsilon]
+git-tree-sha1 = "9b14c628a483dd94105ce207fca8e7ca6cb10e45"
+
+[test_instancenorm_example]
+git-tree-sha1 = "e63a946ae5c5b3becf847f4e3adaaf92ef9b358f"
+
 [test_leakyrelu]
 git-tree-sha1 = "07afe319b71db2cb6bc295ff9409482721473817"
 
