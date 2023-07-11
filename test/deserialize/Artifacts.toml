@@ -88,6 +88,9 @@ git-tree-sha1 = "941508204a2655148ca271b54790c27911fbc8f8"
 [test_convtranspose_1d]
 git-tree-sha1 = "c62ef0df9eed662b0f673def672291e2b883d9bf"
 
+[test_convtranspose_3d]
+git-tree-sha1 = "78f42b71d517b85ede369a446816d64007777343"
+
 [test_convtranspose_dilations]
 git-tree-sha1 = "11ef17d087338b3c98100b62cbe5f387a7b9b026"
 

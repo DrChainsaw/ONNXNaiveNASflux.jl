@@ -79,6 +79,7 @@ end
     (name="test_conv_with_strides_padding", ninputs=2, noutputs=1),
     (name="test_convtranspose", ninputs=2, noutputs=1),
     (name="test_convtranspose_1d", ninputs=2, noutputs=1),
+    (name="test_convtranspose_3d", ninputs=2, noutputs=1),
     (name="test_convtranspose_dilations", ninputs=2, noutputs=1),
     #(name="test_convtranspose_kernel_shape", ninputs=2, noutputs=1), Not supported!
     #(name="test_convtranspose_output_shape", ninputs=2, noutputs=1), Not supported!
