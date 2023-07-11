@@ -165,11 +165,8 @@
                 (layer=Dense(3,4, actfun), indata=reshape(collect(Float32, 1:12), :, 4) .- 3),
                 (layer=Conv((1,2), 3=>4, actfun; pad=(2,1), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 5),
                 (layer=Conv((2,3), 3=>4, actfun; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
-                (layer=ConvTranspose((3,3), 3=>4, actfun; pad=1, stride=1, dilation=1), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
-                (layer=ConvTranspose((3,3), 3=>4, actfun; pad=2, stride=1, dilation=1), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
-                # (layer=ConvTranspose((3,3), 3=>4, actfun; pad=1, stride=2, dilation=1), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
-                # (layer=ConvTranspose((3,3), 3=>4, actfun; pad=1, stride=1, dilation=2), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
-                #(layer=ConvTranspose((2,3), 3=>4, actfun; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
+                (layer=ConvTranspose((3,3), 3=>4, actfun), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
+                (layer=ConvTranspose((2,3), 3=>4, actfun; pad=(1,2,3,4), stride=(1,2), dilation=3), indata=reshape(collect(Float32, 1:2*3*9*9), 9,9,3,2) .- 10),
                 )
 
                 inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
