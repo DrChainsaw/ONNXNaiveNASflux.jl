@@ -79,6 +79,7 @@ BatchNormalization
 Concat
 Constant
 Conv
+ConvTranspose
 Div
 Dropout
 Elu

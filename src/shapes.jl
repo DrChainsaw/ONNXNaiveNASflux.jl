@@ -91,6 +91,20 @@ function outshape(::FluxConvolutional{N}, l, s::Tuple) where N
     return (o..., nout(l), s[N+2])
 end
 
+function outshape(::FluxConvTranspose{N}, l, s::Tuple) where N
+    assertshape(s, N+2, l)
+    assertsize(s[N+1], nin(l)[], l)
+    p = length(l.pad) == N ? 2 .* l.pad : l.pad[1:2:end] .+ l.pad[2:2:end]
+    k = size(weights(l))[1:N]
+    d = l.dilation
+    stride = l.stride
+
+    o = map(zip(1:N, s)) do (i, si)
+        aggshape(x -> (stride[i] * (x - 1) + ((k[i] - 1) * d[i] + 1) - p[i]), si)
+    end
+    return (o..., nout(l), s[N+2])
+end
+
 outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, ::Missing) where N = outshape(l, ntuple(i->missing, N+2))
 function outshape(l::Union{Flux.MaxPool{N}, Flux.MeanPool{N}}, s::Tuple) where N
     assertshape(s, N+2, l)
