@@ -61,8 +61,9 @@ update_size_meta!(m::NaiveNASflux.AbstractMutableComp, args...) = update_size_me
 
 function update_size_meta!(m::ActivationContribution, args...)
     outsize = update_size_meta!(wrapped(m), args...)
-    if (outsize !== missing) && (m.contribution[] === missing || length(m.contribution[]) != outsize)
-        m.contribution[] = zeros(eltype(m.contribution[]), outsize)
+    if (outsize !== missing) && (isempty(m.contribution) || length(m.contribution) != outsize)
+        resize!(m.contribution, outsize)
+        m.contribution .= eps(eltype(m.contribution))
     end
     return outsize
 end
