@@ -30,7 +30,7 @@ end
 
     @testset "$(tc.name) graph" begin
         cg = load(model)
-        res = cg()
+        res = cg() 
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
@@ -38,7 +38,7 @@ end
         io = PipeBuffer()
         save(io, cg)
         cg = load(io)
-        res = cg()
+        res = cg() 
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
@@ -265,21 +265,21 @@ end
     (name="test_mul", ninputs=2, noutputs=1),
     )
 
-    model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
+    model, gb, ins, outs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) graph" begin
         cg = load(model)
-        res = cg(inputs[1:length(cg.inputs)]...)
-        @test size(res) == size(outputs[1])
-        @test res ≈ outputs[1]
+        res = cg(ins[1:length(inputs(cg))]...)
+        @test size(res) == size(outs[1])
+        @test res ≈ outs[1]
 
         # Also test that it we get the same thing by serializing and then deserializing
         io = PipeBuffer()
         save(io, cg)
         cg = load(io)
-        res = cg(inputs[1:length(cg.inputs)]...)
-        @test size(res) == size(outputs[1])
-        @test res ≈ outputs[1]
+        res = cg(ins[1:length(inputs(cg))]...)
+        @test size(res) == size(outs[1])
+        @test res ≈ outs[1]
     end
 end
 
@@ -308,8 +308,8 @@ end
         else
             load(sumgraph(), inshapes...)
         end
-        @test nout.(g_new.inputs) == expsizes
-        @test layertype.(g_new.inputs) == [GenericFlux2D(), GenericFlux2D()]
+        @test nout.(inputs(g_new)) == expsizes
+        @test layertype.(inputs(g_new)) == [GenericFlux2D(), GenericFlux2D()]
     end
 
     inshape(t::Tuple) = t |> length |> ONNXNaiveNASflux.guess_layertype
@@ -318,8 +318,8 @@ end
         ((5,1), (1,1,5,1)),
     )
         g_new = load(sumgraph(), inshapes...)
-        @test nout.(g_new.inputs) == [5, 5]
-        @test layertype.(g_new.inputs) == inshape.(inshapes |> collect)
+        @test nout.(inputs(g_new)) == [5, 5]
+        @test layertype.(inputs(g_new)) == inshape.(inshapes |> collect)
     end
 
     @testset "Malformed input $inshapes" for inshapes in (
@@ -342,7 +342,7 @@ end
     @testset "Merge activation function" begin
         m = remodel(Dense(3,4, relu), (3, missing))
         @test nvertices(m) == 2
-        @test layer(m.outputs[1]).σ == relu
+        @test layer(outputs(m)[1]).σ == relu
     end
 
     @testset "Merge Reshape and $gp" for gp in (

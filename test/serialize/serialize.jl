@@ -374,7 +374,7 @@
         end
 
         function test_named_graph(g_org, extradims = (); serialize_insizes=false)
-            outsize = nout(g_org.inputs[1])
+            outsize = nout(inputs(g_org)[])
             bs = 4
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
 
@@ -400,7 +400,7 @@
             test_outputs(resout, expout)
 
             # For FLux recurrent layers as they accept 2D input but ONNX wants 3D input
-            sizediff = length(ONNXNaiveNASflux.shape(g_new.inputs[])) - ndims(indata)
+            sizediff = length(ONNXNaiveNASflux.shape(inputs(g_new)[1])) - ndims(indata)
             indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
 
             ortout = onnxruntime_infer(g_org, indata)
@@ -803,7 +803,7 @@
                 v2 = convvertex("v2", v1, 2)
 
                 g = remodel(CompGraph(v0, v2))
-                @test layertype(g.inputs[1]) == layertype(v0)
+                @test layertype(inputs(g)[1]) == layertype(v0)
             end
 
             @testset "Two conv graph" begin
@@ -813,7 +813,7 @@
                 v2 = concat("v2", v1a, v1b)
 
                 g_org = g = remodel(CompGraph(v0, v2))
-                @test layertype(g.inputs[1]) == layertype(v0)
+                @test layertype(inputs(g)[1]) == layertype(v0)
             end
 
             @testset "Concat path" begin
@@ -822,7 +822,7 @@
                 v2 = concat(v1, v0)    
 
                 g = remodel(CompGraph(v0, v2))
-                @test layertype(g.inputs[1]) == layertype(v0)
+                @test layertype(inputs(g)[1]) == layertype(v0)
             end
 
             @testset "Shortcut to globpool -> dense" begin
@@ -833,7 +833,7 @@
                 v4 = dense("v4", v3, 4)
 
                 g = remodel(CompGraph(v0, v4))
-                @test layertype(g.inputs[1]) == layertype(v0)
+                @test layertype(inputs(g)[1]) == layertype(v0)
             end
         end
     end
