@@ -16,7 +16,7 @@ TypeProto_Tensor(::Missing, elemtype) = TypeProto_Tensor(
     elem_type=tp_tensor_elemtype(elemtype)
 )
 
-TensorShapeProto(shape) = TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
+# TensorShapeProto(shape) = TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
 tsp_d(::Missing) = TensorShapeProto_Dimension()
 tsp_d(n::Integer) = TensorShapeProto_Dimension(dim_value=n)
 tsp_d(s::String) = TensorShapeProto_Dimension(dim_param=s)
