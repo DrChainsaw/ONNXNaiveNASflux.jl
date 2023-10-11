@@ -4,27 +4,27 @@ ValueInfoProto(name::String, inshape, elemtype=Float32) =
 ValueInfoProto(
     name=name,
     _type=TypeProto(
-        tensor_type=TypeProto_Tensor(inshape, elemtype)
+        tensor_type=var"TypeProto.Tensor"(inshape, elemtype)
     )
 )
 
-TypeProto_Tensor(inshape, elemtype) = TypeProto_Tensor(
+var"TypeProto.Tensor"(inshape, elemtype) = var"TypeProto.Tensor"(
     elem_type=tp_tensor_elemtype(elemtype),
     shape=TensorShapeProto(inshape)
 )
-TypeProto_Tensor(::Missing, elemtype) = TypeProto_Tensor(
+var"TypeProto.Tensor"(::Missing, elemtype) = var"TypeProto.Tensor"(
     elem_type=tp_tensor_elemtype(elemtype)
 )
 
 # TensorShapeProto(shape) = TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
-tsp_d(::Missing) = TensorShapeProto_Dimension()
-tsp_d(n::Integer) = TensorShapeProto_Dimension(dim_value=n)
-tsp_d(s::String) = TensorShapeProto_Dimension(dim_param=s)
+tsp_d(::Missing) = var"TensorShapeProto.Dimension"()
+tsp_d(n::Integer) = var"TensorShapeProto.Dimension"(dim_value=n)
+tsp_d(s::String) = var"TensorShapeProto.Dimension"(dim_param=s)
 tsp_d(s::Symbol) = tsp_d(string(s))
 
 tp_tensor_elemtype(i::Integer) = i
-tp_tensor_elemtype(::Missing) = TensorProto_DataType.UNDEFINED
-tp_tensor_elemtype(::Type{Float32}) = TensorProto_DataType.FLOAT
+tp_tensor_elemtype(::Missing) = var"TensorProto.DataType".UNDEFINED
+tp_tensor_elemtype(::Type{Float32}) = var"TensorProto.DataType".FLOAT
 
 TensorProto(x::Number, name ="") = TensorProto([x], name)
 
