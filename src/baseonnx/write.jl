@@ -8,13 +8,13 @@ ValueInfoProto(
     )
 )
 
-var"TypeProto.Tensor"(inshape, elemtype) = var"TypeProto.Tensor"(
-    elem_type=tp_tensor_elemtype(elemtype),
-    shape=TensorShapeProto(inshape)
-)
-var"TypeProto.Tensor"(::Missing, elemtype) = var"TypeProto.Tensor"(
-    elem_type=tp_tensor_elemtype(elemtype)
-)
+# var"TypeProto.Tensor"(inshape, elemtype) = var"TypeProto.Tensor"(
+#     elem_type=tp_tensor_elemtype(elemtype),
+#     shape=TensorShapeProto(inshape)
+# )
+# var"TypeProto.Tensor"(::Missing, elemtype) = var"TypeProto.Tensor"(
+#     elem_type=tp_tensor_elemtype(elemtype)
+# )
 
 # TensorShapeProto(shape) = TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
 tsp_d(::Missing) = var"TensorShapeProto.Dimension"()
