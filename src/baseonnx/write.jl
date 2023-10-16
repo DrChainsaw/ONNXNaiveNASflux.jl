@@ -30,31 +30,31 @@ TensorProto(x::Number, name ="") = TensorProto([x], name)
 
 TensorProto(t::AbstractArray{Float64,N}, name ="") where N = TensorProto(
     dims=collect(reverse(size(t))),
-    data_type=TensorProto_DataType.DOUBLE,
+    data_type=var"TensorProto.DataType".DOUBLE,
     double_data = reshape(t,:),
     name=name)
 
 TensorProto(t::AbstractArray{Float32,N}, name ="") where N = TensorProto(
     dims=collect(reverse(size(t))),
-    data_type=TensorProto_DataType.FLOAT,
+    data_type=var"TensorProto.DataType".FLOAT,
     float_data = reshape(t,:),
     name=name)
 
-TensorProto(t::AbstractArray{Float16,N}, name ="") where N = TensorProto(t, TensorProto_DataType.FLOAT16, name)
+TensorProto(t::AbstractArray{Float16,N}, name ="") where N = TensorProto(t, var"TensorProto.DataType".FLOAT16, name)
 
 TensorProto(t::AbstractArray{Int64,N}, name ="") where N = TensorProto(
     dims=collect(reverse(size(t))),
-    data_type=TensorProto_DataType.INT64,
+    data_type=var"TensorProto.DataType".INT64,
     int64_data = reshape(t,:),
     name=name)
 
 TensorProto(t::AbstractArray{Int32,N}, name ="") where N = TensorProto(
     dims=collect(reverse(size(t))),
-    data_type=TensorProto_DataType.INT32,
+    data_type=var"TensorProto.DataType".INT32,
     int32_data = reshape(t,:),
     name=name)
 
-TensorProto(t::AbstractArray{Int8,N}, name ="") where N = TensorProto(t, TensorProto_DataType.INT8, name)
+TensorProto(t::AbstractArray{Int8,N}, name ="") where N = TensorProto(t, var"TensorProto.DataType".INT8, name)
 
 TensorProto(t::AbstractArray, data_type::Int32, name) = TensorProto(
     dims=collect(reverse(size(t))),
