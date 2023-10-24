@@ -2,6 +2,8 @@ module BaseOnnx
   const _ProtoBuf_Top_ = @static isdefined(parentmodule(@__MODULE__), :_ProtoBuf_Top_) ? (parentmodule(@__MODULE__))._ProtoBuf_Top_ : parentmodule(@__MODULE__)
   include("onnx3_pb.jl")
 
+  import ProtoBuf
+
   const TensorProto_Segment = var"TensorProto.Segment"
   const TensorProto_DataType = var"TensorProto.DataType"
   const TensorProto_DataLocation = var"TensorProto.DataLocation"
