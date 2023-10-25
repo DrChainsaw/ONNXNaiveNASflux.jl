@@ -75,25 +75,25 @@ AttributeProto(name::Symbol, v) = AttributeProto(string(name), v)
 
 AttributeProto(name::String, i::Int64) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.INT,
+    var"#type" = AttributeProto_AttributeType.INT,
     i = i
 )
 
 AttributeProto(name::String, f::Float32) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.FLOAT,
+    var"#type" = AttributeProto_AttributeType.FLOAT,
     f = f
 )
 
 AttributeProto(name::String, floats::AbstractVector{Float32}) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.FLOATS,
+    var"#type" = AttributeProto_AttributeType.FLOATS,
     floats = floats
 )
 
 AttributeProto(name::String, f::Float64) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.FLOAT,
+    var"#type" = AttributeProto_AttributeType.FLOAT,
     f = Float32(f)
 )
 
@@ -101,24 +101,24 @@ AttributeProto(name::String, i::NTuple{N, Int64}) where N = AttributeProto(name,
 
 AttributeProto(name::String, i::AbstractVector{Int64}) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.INTS,
+    var"#type" = AttributeProto_AttributeType.INTS,
     ints = i
 )
 
 AttributeProto(name::String, str::AbstractString) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.STRING,
+    var"#type" = AttributeProto_AttributeType.STRING,
     s = Vector{UInt8}(str)
 )
 
 AttributeProto(name::String, strings::AbstractVector{<:AbstractString}) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.STRINGS,
+    var"#type" = AttributeProto_AttributeType.STRINGS,
     strings = Vector{UInt8}.(strings)
 )
 
 AttributeProto(name::String, tensor::TensorProto) = AttributeProto(
     name=name,
-    _type = AttributeProto_AttributeType.TENSOR,
+    var"#type" = AttributeProto_AttributeType.TENSOR,
     t = tensor
 )

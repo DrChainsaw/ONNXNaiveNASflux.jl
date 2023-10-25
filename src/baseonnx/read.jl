@@ -69,8 +69,8 @@ Return attribute in `p` as a name => value pair.
 """
 function attribute(p::AttributeProto)
     # Copy paste from ONNX.jl
-    if (p._type != 0)
-        field = [:f, :i, :s, :t, :g, :floats, :ints, :strings, :tensors, :graphs][p._type]
+    if (p.var"#type" != 0)
+        field = [:f, :i, :s, :t, :g, :floats, :ints, :strings, :tensors, :graphs][enumordinal(p.var"#type")]
         if field === :s 
             return Symbol(p.name) => String(getproperty(p, field))
         elseif  field === :strings
