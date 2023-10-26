@@ -17,7 +17,7 @@ save(io::IO, f, args...; kwargs...) = save(io, modelproto(f, args...; kwargs...)
 Serialize the given [`ONNX.ModelProto`](@ref) to a file with path `filename` or to `io`.
 """
 save(filename::AbstractString, mp::ONNX.ModelProto) = open(io -> save(io, mp), filename, "w")
-save(io::IO, mp::ONNX.ModelProto) = ONNX.encode(io, mp)
+save(io::IO, mp::ONNX.ModelProto) = ONNX.writeproto(io, mp)
 
 
 """

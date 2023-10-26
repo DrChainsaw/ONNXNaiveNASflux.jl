@@ -8,7 +8,7 @@ Return a [`ONNX.Types.Model`](@ref) and a Dict mapping input variables to size t
 Beware that missing/variable size data for a dimension results in a random size for that dimension. Therefore sizes should mostly be used to determine the number of dimensions.
 """
 extract(modelfile::AbstractString) = open(io -> extract(io), modelfile)
-extract(io::IO) = ONNX.decode(io, ONNX.ModelProto())
+extract(io::IO) = ONNX.readproto(io, ONNX.ModelProto())
 
 NaiveNASlib.name(n::OnnxNode) = name(n.proto)
 NaiveNASlib.name(n::ONNX.NodeProto) = n.name
