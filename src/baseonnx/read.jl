@@ -80,4 +80,4 @@ function attribute(p::AttributeProto)
     end  
 end
 
-Base.Dict(pa::AbstractVector{AttributeProto}) = Dict(attribute(p) for p in pa)
+Base.Dict(pa::AbstractVector{<:AttributeProto}) = Dict(attribute(p) for p in pa)
