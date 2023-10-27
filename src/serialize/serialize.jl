@@ -568,3 +568,21 @@ function flatten(pp::AbstractProbe, dim)
     end
     return newfrom(pp, fname, fshape)
 end
+
+Flux.unsqueeze(pp::AbstractProbe; dims::Int64) = unsqueeze(pp, dims)
+
+function unsqueeze(pp::AbstractProbe, dim)
+    fname = recursename("Unsqueeze", nextname(pp))
+
+    add!(pp, ONNX.NodeProto(
+        input=[name(pp)],
+        output=[fname],
+        name=fname,
+        attribute = [ONNX.AttributeProto("axes", [dim])],
+        op_type="Unsqueeze"))
+    
+    fshape = function (s)
+        return (s[1:dim-1]..., 1, s[dim:end]...)
+    end
+    return newfrom(pp, fname, fshape)
+end
