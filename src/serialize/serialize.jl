@@ -402,6 +402,8 @@ onnxsoftmax(pp::AbstractProbe; np_axis=1) =  attribfun(identity, "Softmax", pp; 
 (l::Flux.MeanPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.AttributeProto("ratio", l.p)])
 
+(l::Flux.GlobalMaxPool)(pp::AbstractProbe) = globalmaxpool(pp, identity)
+(l::Flux.GlobalMeanPool)(pp::AbstractProbe) = globalmeanpool(pp, identity)
 
 globalmeanpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalAveragePool")
 globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
