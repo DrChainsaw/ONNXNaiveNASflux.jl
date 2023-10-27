@@ -605,7 +605,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -648,7 +648,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 

@@ -22,7 +22,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(sources, optype(node))
-        res = sources[optype(node)](node.attribute, params(node)...)
+        res = sources[optype(node)](node.attribute, Flux.params(node)...)
 
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -119,7 +119,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(fluxlayers, optype(node))
-        op = fluxlayers[optype(node)](node.attribute, params(node)...)
+        op = fluxlayers[optype(node)](node.attribute, Flux.params(node)...)
 
         res = op(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
@@ -164,11 +164,11 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(actfuns, optype(node))
-        op = actfuns[optype(node)](node.attribute, params(node)...)
+        op = actfuns[optype(node)](node.attribute, Flux.params(node)...)
         @test op.(inputs[1]) ≈ outputs[1]
 
         @test haskey(invariantops, optype(node))
-        bcop = invariantops[optype(node)](node.attribute, params(node)...)
+        bcop = invariantops[optype(node)](node.attribute, Flux.params(node)...)
         @test bcop(inputs[1]) ≈ outputs[1]
 
     end
@@ -222,7 +222,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(tc.fd, optype(node))
-        op = tc.fd[optype(node)](node.attribute, params(node)...)
+        op = tc.fd[optype(node)](node.attribute, Flux.params(node)...)
         res = op(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]

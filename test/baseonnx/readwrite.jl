@@ -4,7 +4,7 @@
     function serdeser(p::T) where T
         iob = PipeBuffer();
         BaseOnnx.writeproto(iob, p)
-        return BaseOnnx.readproto(iob, T())
+        return BaseOnnx.readproto(iob, T)
     end
 
     @testset "TensorProto" begin
