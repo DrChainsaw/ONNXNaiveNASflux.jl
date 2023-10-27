@@ -393,6 +393,7 @@ Flux.elu(pp::AbstractProbe, α=1f0) = attribfun(identity, "Elu", pp; attributes 
 Flux.selu(pp::AbstractProbe) = attribfun(identity, "Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun(identity, "Selu", pp; attributes = ONNX.AttributeProto.(["gamma", "alpha"], [γ, α]))
 Flux.σ(pp::AbstractProbe) = attribfun(identity, "Sigmoid", pp)
+Flux.sigmoid_fast(pp::AbstractProbe) = attribfun(identity, "Sigmoid", pp)   # Flux-specific construct
 
 Base.tanh(pp::AbstractProbe) = attribfun(identity, "Tanh", pp) 
 Flux.softmax(pp::AbstractProbe; dims=1) =  onnxsoftmax(pp, np_axis = flux2numpydim(dims[end], ndims(pp)))
