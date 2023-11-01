@@ -100,6 +100,26 @@
             @test ONNXNaiveNASflux.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
         end
 
+        @testset "Unsqueeze" begin
+            import ONNXNaiveNASflux.NaiveNASflux.Flux: unsqueeze
+            inprobe = NodeProbe("input", f -> "output", (2, 3, 5))
+
+            outprobe = Flux.unsqueeze(inprobe, 3)
+
+            @test length(outprobe.protos) == 1
+
+            res = serdeser(outprobe.protos[1])
+
+            @test input(res) == [name(inprobe)]
+            @test output(res) == [name(outprobe)]
+            @test optype(res) == :Unsqueeze
+            @test name(res) == name(outprobe)
+            @test res.attribute[:axes] == [2]
+
+            indata = reshape(collect(1:2*3*5), 2,3,1,5)
+            @test op(indata) == unsqueeze(indata, dims=3)
+        end
+
         @testset "Reshape" begin
             inprobe = NodeProbe("input", f -> "output", (:A, missing, 12))
 
