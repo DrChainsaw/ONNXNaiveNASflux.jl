@@ -100,6 +100,26 @@
             @test ONNXNaiveNASflux.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
         end
 
+        @testset "Unsqueeze" begin
+            import ONNXNaiveNASflux.NaiveNASflux.Flux: unsqueeze
+            inprobe = NodeProbe("input", f -> "output", (2, 3, 5))
+
+            outprobe = Flux.unsqueeze(inprobe, 3)
+
+            @test length(outprobe.protos) == 1
+
+            res = serdeser(outprobe.protos[1])
+
+            @test input(res) == [name(inprobe)]
+            @test output(res) == [name(outprobe)]
+            @test optype(res) == :Unsqueeze
+            @test name(res) == name(outprobe)
+            @test res.attribute[:axes] == [2]
+
+            indata = reshape(collect(1:2*3*5), 2,3,1,5)
+            @test op(indata) == unsqueeze(indata, dims=3)
+        end
+
         @testset "Reshape" begin
             inprobe = NodeProbe("input", f -> "output", (:A, missing, 12))
 
@@ -360,7 +380,11 @@
 
         bnvertex(name, inpt::AbstractVertex, actfun=identity) = fluxvertex(name, BatchNorm(nout(inpt), actfun), inpt)
 
-        mpvertex(name, inpt::AbstractVertex) = fluxvertex(name, MaxPool((2,2); pad=(1,0), stride=(1,2)), inpt)
+        maxpvertex(name, inpt::AbstractVertex) = fluxvertex(name, MaxPool((2,2); pad=(1,0), stride=(1,2)), inpt)
+
+        gmpvertex(name, inpt::AbstractVertex) = fluxvertex(name, GlobalMeanPool(), inpt)
+
+        ddvertex(name, inpt::AbstractVertex) = invariantvertex(name, x -> dropdims(x; dims=(1,2)), inpt)
 
         fvertex(name, inpt::AbstractVertex, f) = invariantvertex(name, f, inpt)
 
@@ -501,18 +525,20 @@
             v0 = conv2dinputvertex("input", 3)
             v1 = convvertex("conv1", v0, 4, relu)
             v2 = convvertex("conv2", v1, 5, elu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-            v4 = dense("output", v3, 2)
+            v3 = gmpvertex("globalmeanpool", v2)
+            v4 = ddvertex("dropdims", v3)
+            v5 = dense("output", v4, 2)
 
-            test_named_graph(CompGraph(v0, v4), (2,3))
+            test_named_graph(CompGraph(v0, v5), (2,3))
         end
 
         @testset "Linear Conv graph with global pooling without names" begin
             v0 = conv2dinputvertex("input", 3)
             v1 = convvertex("", v0, 4, relu)
-            v2 = invariantvertex(x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))), v1)
+            v2 = gmpvertex("", v1)
+            v3 = ddvertex("", v2)
 
-            g_org = CompGraph(v0, v2)
+            g_org = CompGraph(v0, v3)
 
             gp_org = graphproto(g_org)
             @test length(size(gp_org.output[])) == 2
@@ -531,20 +557,22 @@
             v0 = conv2dinputvertex("input", 3)
             v1 = convvertex("conv", v0, 4, relu)
             v2 = bnvertex("batchnorm", v1, elu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-            v4 = dense("output", v3, 2, selu)
+            v3 = gmpvertex("globalmeanpool", v2)
+            v4 = ddvertex("dropdims", v3)
+            v5 = dense("output", v4, 2, selu)
 
-            test_named_graph(CompGraph(v0, v4), (4,6))
+            test_named_graph(CompGraph(v0, v5), (4,6))
         end
 
         @testset "Linear Conv and MaxPool graph with global pooling" begin
             v0 = conv2dinputvertex("input", 3)
-            v1 = mpvertex("maxpool", v0)
+            v1 = maxpvertex("maxpool", v0)
             v2 = convvertex("conv", v1, 4, relu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-            v4 = dense("output", v3, 2, selu)
+            v3 = gmpvertex("globalmeanpool", v2)
+            v4 = ddvertex("dropdims", v3)
+            v5 = dense("output", v4, 2, selu)
 
-            test_named_graph(CompGraph(v0, v4), (2,3))
+            test_named_graph(CompGraph(v0, v5), (2,3))
         end
 
         @testset "Dense graph with add" begin
@@ -686,10 +714,11 @@
             v1 = convvertex("conv", v0, 2, elu)
             v2 = bnvertex("batchnorm", v0)
             v3 = concat("conc", v1, v2)
-            v4 = fvertex("globmeanpool", v3, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-            v5 = dense("output", v4, 2, relu)
+            v4 = gmpvertex("globalmeanpool", v3)
+            v5 = ddvertex("dropdims", v4)
+            v6 = dense("output", v5, 2, relu)
 
-            test_named_graph(CompGraph(v0, v5), (2,3))
+            test_named_graph(CompGraph(v0, v6), (2,3))
         end
 
         @testset "Dense graph with cat without names" begin
@@ -829,10 +858,11 @@
                 v0 = conv2dinputvertex("input", 3)    
                 v1 = convvertex("v1", v0, 2)
                 v2 = concat("v2", v1, v0)
-                v3 = fvertex("v3", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
-                v4 = dense("v4", v3, 4)
+                v3 = gmpvertex("globalmeanpool", v2)
+                v4 = ddvertex("dropdims", v3)
+                v5 = dense("v4", v4, 4)
 
-                g = remodel(CompGraph(v0, v4))
+                g = remodel(CompGraph(v0, v5))
                 @test layertype(inputs(g)[1]) == layertype(v0)
             end
         end

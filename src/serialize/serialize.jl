@@ -393,6 +393,7 @@ Flux.elu(pp::AbstractProbe, α=1f0) = attribfun(identity, "Elu", pp; attributes 
 Flux.selu(pp::AbstractProbe) = attribfun(identity, "Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun(identity, "Selu", pp; attributes = ONNX.AttributeProto.(["gamma", "alpha"], [γ, α]))
 Flux.σ(pp::AbstractProbe) = attribfun(identity, "Sigmoid", pp)
+Flux.sigmoid_fast(pp::AbstractProbe) = attribfun(identity, "Sigmoid", pp)   # Flux-specific construct
 
 Base.tanh(pp::AbstractProbe) = attribfun(identity, "Tanh", pp) 
 Flux.softmax(pp::AbstractProbe; dims=1) =  onnxsoftmax(pp, np_axis = flux2numpydim(dims[end], ndims(pp)))
@@ -402,6 +403,8 @@ onnxsoftmax(pp::AbstractProbe; np_axis=1) =  attribfun(identity, "Softmax", pp; 
 (l::Flux.MeanPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.AttributeProto("ratio", l.p)])
 
+(l::Flux.GlobalMaxPool)(pp::AbstractProbe) = globalmaxpool(pp, identity)
+(l::Flux.GlobalMeanPool)(pp::AbstractProbe) = globalmeanpool(pp, identity)
 
 globalmeanpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalAveragePool")
 globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
@@ -562,6 +565,24 @@ function flatten(pp::AbstractProbe, dim)
         dim == 0 && return (aggshape(*, s), 1)
         absdim = dim < 0 ? length(s) + dim : dim
         return (aggshape(*, s[1:absdim]...), aggshape(*, s[absdim+1:end]))
+    end
+    return newfrom(pp, fname, fshape)
+end
+
+Flux.unsqueeze(pp::AbstractProbe; dims::Int64) = unsqueeze(pp, dims)
+
+function unsqueeze(pp::AbstractProbe, dim)
+    fname = recursename("Unsqueeze", nextname(pp))
+
+    add!(pp, ONNX.NodeProto(
+        input=[name(pp)],
+        output=[fname],
+        name=fname,
+        attribute = [ONNX.AttributeProto("axes", [dim])],
+        op_type="Unsqueeze"))
+    
+    fshape = function (s)
+        return (s[1:dim-1]..., 1, s[dim:end]...)
     end
     return newfrom(pp, fname, fshape)
 end
