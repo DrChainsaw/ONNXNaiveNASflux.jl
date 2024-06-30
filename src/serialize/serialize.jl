@@ -436,16 +436,19 @@ Needed because broadcasting happens inside several ONNX operations.
 For example, `[1,2,3] .+ 4` shall translate to `Add([1,2,3], 4)`, not as `Add(1, 4)`, `Add(2, 4)` and `Add(3, 4)`. One way to accomplish this is to override broadcasting when an `AbstractProbe` is one of the inputs.
 """
 function override_broadcast(f::F, argperms, m=@__MODULE__) where F
-    Broadcast.Broadcasted
-    for Args in (Tuple{args...} for args in argperms)
+     for argtypes in argperms
+
+        argnames = ntuple(i -> Symbol(:x, i), length(argtypes))
+        sig = map(zip(argnames, argtypes)) do (a, at)
+            isnothing(at) && return a
+            :($a::$at)
+        end
+
         @eval m begin
-            Base.Broadcast.Broadcasted(f::$F, args::$Args, axes=nothing) = $f(unwrap_broadcast.(args)...)
-            Base.Broadcast.Broadcasted{Style}(f::$F, args::$Args, axes=nothing) where Style = $f(unwrap_broadcast.(args)...)
+            Base.Broadcast.broadcasted(f::$F, $(sig...)) = f($(argnames...))      
         end
     end
 end
-unwrap_broadcast(x) = x
-unwrap_broadcast(x::Ref) = x.x
 
 dummyfun(x,y) = "dummy $x"
 
@@ -456,7 +459,7 @@ function gen_broadcastable_elemwise(f, optype, n=2)
     fs = Symbol(f)
     fm = which(ONNXNaiveNASflux, fs)
     generate_elemwise(fm, fs, optype, argpermswith(AbstractProbe, n, nothing))
-    override_broadcast(f, argpermswith(Base.RefValue{<:AbstractProbe}, n, AbstractArray))
+    override_broadcast(f, argpermswith(AbstractProbe, n, AbstractArray))
 end
 
 gen_broadcastable_elemwise(+, "Add")
