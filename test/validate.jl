@@ -11,7 +11,7 @@
         push!(nodes, np(["n2"], ["n1", "n3"]))
 
         gp = graphproto(;node=nodes)
-        mp = modelproto(gp)
+        mp = modelproto(;graph=gp)
         @test_throws ErrorException uniqueoutput(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, r"Duplicate output name: n1 found in NodeProto.*in.*n1.* and NodeProto.*n2.*n1.*n3") uniqueoutput(mp, s -> @warn replace(s, "\n" => ""))
@@ -21,7 +21,7 @@
         nodes = [ONNX.NodeProto(output=["n1"], input=["in"])]
 
         gp = graphproto(;node=nodes)
-        mp = modelproto(gp)
+        mp = modelproto(;graph=gp)
         @test_throws ErrorException optypedefined(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, r"No op_type defined.*in.*n1") optypedefined(mp, s -> @warn replace(s, "\n" => ""))
@@ -35,7 +35,7 @@
         input = vip.(["in", "nf3"])
 
         gp = graphproto(;node=nodes, input=input, output=output)
-        mp = modelproto(gp)
+        mp = modelproto(;graph=gp)
         @test_throws ErrorException outputused(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, "Found unused outputs: nf1, nf2, nf3") outputused(mp, s -> @warn s)
@@ -49,7 +49,7 @@
         input = vip.(["in"])
 
         gp = graphproto(;node=nodes, input=input, output=output)
-        mp = modelproto(gp)
+        mp = modelproto(;graph=gp)
         @test_throws ErrorException inputused(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, "Found unused inputs: nf1, nf2") inputused(mp, s -> @warn s)
@@ -57,14 +57,8 @@
 
     @testset "Graph has a name" begin
         gp = ONNX.GraphProto(;node=ONNX.NodeProto[],input=ONNX.ValueInfoProto[], output=ONNX.ValueInfoProto[],initializer=ONNX.TensorProto[],)
-        mp = modelproto(gp)
-        # mp.graph = gp
-        @test_throws ErrorException hasname(mp)
-        @test_throws ErrorException validate(mp)
-        @test_logs (:warn, "Graph name not defined!") hasname(mp, s -> @warn s)
-
-        # Empty string is not valid either
-        gp.name = ""
+        
+        mp = modelproto(;graph=gp)
         @test_throws ErrorException hasname(mp)
         @test_throws ErrorException validate(mp)
         @test_logs (:warn, "Graph name is empty string!") hasname(mp, s -> @warn s)

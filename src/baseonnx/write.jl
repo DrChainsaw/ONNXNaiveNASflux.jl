@@ -10,19 +10,19 @@ ValueInfoProto(name::String, shape, elemtype=Float32) =
 ValueInfoProto(
     name=name,
     var"#type"=TypeProto(
-        value=ProtoBuf.OneOf(:tensor_type , TypeProto_Tensor(shape, elemtype))
+        value=ProtoBuf.OneOf(:tensor_type , _TypeProto_Tensor(shape, elemtype))
     )
 )
 
-TypeProto_Tensor(inshape, elemtype) = var"TypeProto.Tensor"(
+_TypeProto_Tensor(inshape, elemtype) = TypeProto_Tensor(;
      elem_type=tp_tensor_elemtype(elemtype),
-     shape=TensorShapeProto(inshape)
+     shape=_TensorShapeProto(inshape)
  )
-TypeProto_Tensor(::Missing, elemtype) = var"TypeProto.Tensor"(
+_TypeProto_Tensor(::Missing, elemtype) = TypeProto_Tensor(;
      elem_type=tp_tensor_elemtype(elemtype)
  )
 
-TensorShapeProto(shape) = isempty(shape) ? TensorShapeProto() : TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
+_TensorShapeProto(shape) = isempty(shape) ? TensorShapeProto() : TensorShapeProto(dim=[tsp_d(s) for s in reverse(shape)])
 
 tsp_d(::Missing) = TensorShapeProto_Dimension()
 tsp_d(n::Integer) = TensorShapeProto_Dimension(value=ProtoBuf.OneOf(:dim_value,  n))

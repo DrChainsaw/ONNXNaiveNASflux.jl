@@ -16,7 +16,8 @@ function prepare_node_test(name, ninputs, noutputs)
 
     graph = model.graph
     for (vi, val) in zip(graph.input, inputs)
-        val.name = vi.name
+       @test vi.name == val.name
+        # val.name = vi.name
         push!(graph.initializer, val)
     end
 
@@ -74,4 +75,4 @@ outputfile(apath, i) = apath * "/test_data_set_0" * "/" * join(["output_", i, ".
 
 readinput(apath, i) = readdata(inputfile(apath, i))
 readoutput(apath, i) = readdata(outputfile(apath, i))
-readdata(filename) = readproto(open(filename), TensorProto())
+readdata(filename) = readproto(open(filename), TensorProto)
