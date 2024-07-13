@@ -41,9 +41,9 @@ Other keyword arguments will be passed to `ONNX.ModelProto`.
 modelproto(f; kwargs...) = modelproto(f, infer_inshapes(f)...; kwargs...)
 modelproto(f, inshapes::Union{Tuple, Missing}...;kwargs...) = modelproto(f, ("data_" .* string.(0:length(inshapes)-1) .=> inshapes)...; kwargs...)
 function modelproto(f, indata::Pair{String, <:Any}...; modelname="model", namestrat = default_namestrat(f), posthook=validate, kwargs...)
-    mp = modelproto(;kwargs...)
-    mp.graph = graphproto(f, indata...; namestrat=namestrat)
-    mp.graph.name=modelname
+    mp = modelproto(;
+    graph = graphproto(f, indata...; namestrat=namestrat, name=modelname),
+    kwargs...)
     posthook(mp)
     return mp
 end
@@ -62,9 +62,9 @@ Argument `posthook` will be called with the created `ONNX.ModelProto` as argumen
 Other keyword arguments will be passed to `ONNX.ModelProto`.
 """
 function modelproto(g::CompGraph; modelname="model", outshape = shape, namestrat=default_namestrat(g), posthook=validate, kwargs...)
-    mp = modelproto(;kwargs...)
-    mp.graph = graphproto(g, outshape, namestrat)
-    mp.graph.name = modelname
+    mp = modelproto(;
+    graph = graphproto(g; outshape, namestrat, name=modelname),
+    kwargs...)
     posthook(mp)
     return mp
 end
@@ -84,7 +84,7 @@ function infer_inshapes(::Any, f)
     for m in ml.ms
         m.sig isa DataType && return Tuple(infer_shape.(m.sig.types[2:end]))
     end
-    return     @show(ntuple(i -> missing, ml.mt.max_args))
+    return ntuple(i -> missing, ml.mt.max_args)
 end
 infer_shape(::Type{<:Any}) = missing
 infer_shape(::Type{<:AbstractArray{T,N}}) where {T,N} = ntuple(i -> missing, N)
@@ -158,11 +158,13 @@ add!(gp::ONNX.GraphProto, tp::ONNX.TensorProto) = push!(gp.initializer, tp)
 struct ActivationAttributeProbe end
 
 """
-    graphproto()
+    graphproto(;kwargs...)
 
 Return an [`ONNX.GraphProto`](@ref) with all fields initialized to empty arrays.
+
+`kwargs` are just passed on to [`ONNX.GraphProto`](@ref), potentially overwriting the empty arrays.
 """
-graphproto(;kwargs...) = ONNX.GraphProto(;
+_graphproto(;kwargs...) = ONNX.GraphProto(;
 node = ONNX.NodeProto[],
 initializer = ONNX.TensorProto[],
 input = ONNX.ValueInfoProto[],
@@ -172,27 +174,33 @@ kwargs...
 )
 
 """
-    graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g))
+    graphproto(g::CompGraph; outshapefun = shape, namestrat=default_namestrat(g); kwargs...)
 
 Return an [`ONNX.GraphProto`](@ref) from `g`.
 
 Argument `outshape` is a function which returns the shape of an `AbstractVertex`.
 
 Argument `namestrat` determines how nodes shall be named.
+
+All other keyword arguments are passed on to `ONNX.GraphProto`.
 """
-graphproto(g::CompGraph, outshape = shape, namestrat=default_namestrat(g)) = graphproto(g, (recursename.(inputs(g), namestrat) .=> outshape.(inputs(g)))...;namestrat=namestrat)
+graphproto(g::CompGraph; outshape = shape, namestrat=default_namestrat(g), kwargs...) = _graphproto(g, (recursename.(inputs(g), namestrat) .=> outshape.(inputs(g)))...;namestrat=namestrat, kwargs...)
 
 """
-    graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())
+    graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
 
 Return an [`ONNX.GraphProto`](@ref) from `g`.
 
 Argument indata are name => shape pairs for the input data.
 
 Argument `namestrat` determines how nodes shall be named.
+
+All other keyword arguments are passed on to `ONNX.GraphProto`.
 """
-function graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr())
-    gp = graphproto()
+graphproto(args...; kwargs...) = _graphproto(args...; kwargs...)
+
+function _graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_runningnr(), kwargs...)
+    gp = _graphproto(;kwargs...)
     pps = map(indata) do (name, shape)
         inputprotoprobe!(gp, name, shape, namestrat)
     end
@@ -439,16 +447,19 @@ Needed because broadcasting happens inside several ONNX operations.
 For example, `[1,2,3] .+ 4` shall translate to `Add([1,2,3], 4)`, not as `Add(1, 4)`, `Add(2, 4)` and `Add(3, 4)`. One way to accomplish this is to override broadcasting when an `AbstractProbe` is one of the inputs.
 """
 function override_broadcast(f::F, argperms, m=@__MODULE__) where F
-    Broadcast.Broadcasted
-    for Args in (Tuple{args...} for args in argperms)
+     for argtypes in argperms
+
+        argnames = ntuple(i -> Symbol(:x, i), length(argtypes))
+        sig = map(zip(argnames, argtypes)) do (a, at)
+            isnothing(at) && return a
+            :($a::$at)
+        end
+
         @eval m begin
-            Base.Broadcast.Broadcasted(f::$F, args::$Args, axes=nothing) = $f(unwrap_broadcast.(args)...)
-            Base.Broadcast.Broadcasted{Style}(f::$F, args::$Args, axes=nothing) where Style = $f(unwrap_broadcast.(args)...)
+            Base.Broadcast.broadcasted(f::$F, $(sig...)) = f($(argnames...))      
         end
     end
 end
-unwrap_broadcast(x) = x
-unwrap_broadcast(x::Ref) = x.x
 
 dummyfun(x,y) = "dummy $x"
 
@@ -459,7 +470,7 @@ function gen_broadcastable_elemwise(f, optype, n=2)
     fs = Symbol(f)
     fm = which(ONNXNaiveNASflux, fs)
     generate_elemwise(fm, fs, optype, argpermswith(AbstractProbe, n, nothing))
-    override_broadcast(f, argpermswith(Base.RefValue{<:AbstractProbe}, n, AbstractArray))
+    override_broadcast(f, argpermswith(AbstractProbe, n, AbstractArray))
 end
 
 gen_broadcastable_elemwise(+, "Add")

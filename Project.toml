@@ -1,7 +1,7 @@
 name = "ONNXNaiveNASflux"
 uuid = "2e935253-ba83-4645-9154-13ffeb13a688"
 authors = ["DrChainsaw"]
-version = "0.2.11"
+version = "0.2.12"
 
 [deps]
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
@@ -20,6 +20,6 @@ Flux = "0.13, 0.14"
 JuMP = "0.21, 0.22, 0.23, 1"
 NaiveNASflux = "2.0.10"
 NaiveNASlib = "2.0.11"
-ProtoBuf = "= 0.11.1"
+ProtoBuf = "1"
 Setfield = "0.3.4, 0.5, 0.6, 0.7, 0.8, 1"
 julia = "1"

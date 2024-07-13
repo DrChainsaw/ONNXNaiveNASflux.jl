@@ -3,9 +3,9 @@
     import ONNXNaiveNASflux: OnnxNode, input, output, optype, array
 
     function serdeser(p::T, convfun = cfun(p)) where T
-        iob = PipeBuffer();
+        iob = PipeBuffer()
         ONNX.writeproto(iob, p)
-        return convfun(ONNX.readproto(iob, T()))
+        return convfun(ONNX.readproto(iob, T))
     end
 
     function serdeser(p::ONNX.ModelProto)
@@ -403,12 +403,11 @@
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
 
             gp_org = if serialize_insizes
-                graphproto(g_org, name(inputs(g_org)[]) => size(indata); namestrat=ONNXNaiveNASflux.default_namestrat(g_org))
+                graphproto(g_org, name(inputs(g_org)[]) => size(indata); namestrat=ONNXNaiveNASflux.default_namestrat(g_org), name="testmodel")
             else
-                graphproto(g_org)
+                graphproto(g_org; name="testmodel")
             end
             
-            gp_org.name="testmodel"
             validate(modelproto(;graph=gp_org))
             gt_new = serdeser(gp_org)
 
@@ -633,7 +632,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -676,7 +675,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -869,7 +868,7 @@
     end
 
     @testset "Models" begin
-        import ONNXNaiveNASflux: modelproto, sizes
+        import ONNXNaiveNASflux: modelproto, sizes, clean_size
 
         @testset "Generic function infer" begin
             _f(x, y) = x .+ y
@@ -913,7 +912,7 @@
             c_org = cfun(l)
 
             mt = modelproto(c_org) |> serdeser
-            ss = sizes(mt)
+            ss = clean_size(sizes(mt))
  
             @test ss["data_0"] == expshape
         end
