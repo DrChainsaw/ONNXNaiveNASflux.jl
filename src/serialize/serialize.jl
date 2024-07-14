@@ -401,6 +401,7 @@ Flux.elu(pp::AbstractProbe, α=1f0) = attribfun(identity, "Elu", pp; attributes 
 Flux.selu(pp::AbstractProbe) = attribfun(identity, "Selu", pp)
 Flux.selu(pp::AbstractProbe, γ, α) = attribfun(identity, "Selu", pp; attributes = ONNX.AttributeProto.(["gamma", "alpha"], [γ, α]))
 Flux.σ(pp::AbstractProbe) = attribfun(identity, "Sigmoid", pp)
+Flux.sigmoid_fast(pp::AbstractProbe) = attribfun(identity, "Sigmoid", pp)   # Flux-specific construct
 
 Base.tanh(pp::AbstractProbe) = attribfun(identity, "Tanh", pp) 
 Flux.softmax(pp::AbstractProbe; dims=1) =  onnxsoftmax(pp, np_axis = flux2numpydim(dims[end], ndims(pp)))
@@ -410,6 +411,8 @@ onnxsoftmax(pp::AbstractProbe; np_axis=1) =  attribfun(identity, "Softmax", pp; 
 (l::Flux.MeanPool)(pp::AbstractProbe) = attribfun(s -> outshape(l, s), "AveragePool", pp; attributes = attribs(l))
 (l::Flux.Dropout)(pp::AbstractProbe) = attribfun(identity, "Dropout", pp; attributes = [ONNX.AttributeProto("ratio", l.p)])
 
+(l::Flux.GlobalMaxPool)(pp::AbstractProbe) = globalmaxpool(pp, identity)
+(l::Flux.GlobalMeanPool)(pp::AbstractProbe) = globalmeanpool(pp, identity)
 
 globalmeanpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalAveragePool")
 globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
@@ -498,8 +501,6 @@ end
 
 
 function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
-    fname = recursename(lowercase(optype), nextname(pps[1]))
-
     attrib = if isempty(dims)
         ONNX.AttributeProto[]
     else
@@ -508,6 +509,11 @@ function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
         np_axis = flux2numpydim.(dims, ndims(pok[1]))
         [ONNX.AttributeProto(axname, np_axis)]
     end
+    axisfun(fshape, optype, attrib, pps...)
+end
+
+function axisfun(fshape, optype, attrib::AbstractArray{<:ONNX.AttributeProto}, pps::AbstractProbe...)   
+    fname = recursename(lowercase(optype), nextname(pps[1]))
 
     add!(pps[1], ONNX.NodeProto(
         input = collect(name.(pps)),
@@ -576,3 +582,7 @@ function flatten(pp::AbstractProbe, dim)
     end
     return newfrom(pp, fname, fshape)
 end
+
+Flux.unsqueeze(pp::AbstractProbe; dims) = axisfun(s -> insdims(s, dims), "Unsqueeze", pp; dims=scal2tup(dims))
+unsqueeze_onnx(pp::AbstractProbe, npa::NumPyAxes) = axisfun(s -> insdims(s, npa), "Unsqueeze", [ONNX.AttributeProto("axes", npa.axes)], pp)
+
