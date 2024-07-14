@@ -208,32 +208,114 @@ fluxlayertypes[:AveragePool] = (pars...) -> FluxPoolLayer()
 fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
 fluxlayertypes[:Dropout] = (pars...) -> FluxDropOut()
 
-
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
-    return x -> globalmeanpool(x, wrap)
+    return wrap ∘ GlobalMeanPool()
 end
 fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxPoolLayer()
 
-function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
-    wrap(MeanPool(size(x)[1:N-2])(x))
-end
-
 invariantops[:GlobalMaxPool] = function(params)
     wrap = get(params, :wrap, identity)
-    return x -> globalmaxpool(x, wrap)
+    return wrap ∘ GlobalMaxPool()
 end
 fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxPoolLayer()
 
-function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
-    wrap(MaxPool(size(x)[1:N-2])(x))
+"""
+    Squeeze(dims)
+
+Callable struct which performs `dropdims` on input using the provided `dims` where `dims` is compliant with the ONNX OP Squeeze (meaning it can be missing or use numpy indexing).
+    
+Mainly exists for pretty printing reaons though as its task can be performed by partially applied functions.
+
+Designed to only be used when deserializing the `Squeeze` operation. 
+"""
+struct Squeeze{D}
+    dims::D
 end
+(s::Squeeze)(x) = dropdims(x; dims=s.dims)
+(s::Squeeze{Missing})(x) = dropdims(x; dims=Tuple(findall(i -> i == 1, size(x))))
+(s::Squeeze{<:NumPyAxes})(x) = dropdims(x; dims=Tuple(numpy2fluxdim(s.dims, ndims(x))))
+
+Base.show(io::IO, ::Squeeze{Missing}) = print(io, "Squeeze")
+function Base.show(io::IO, s::Squeeze)
+    print(io, "Squeeze(dims=")
+    ioc = IOContext(io, :prefix => "[", :suffix=>"]") 
+    show(ioc, s.dims)
+    print(io, ")")
+end
+
 
 invariantops[:Squeeze] = function(params)
     np_axes = get(params, :axes, missing)
-    dimfun = ismissing(np_axes) ? x -> Tuple(findall(i -> i == 1, size(x))) : x -> Tuple(numpy2fluxdim.(np_axes, ndims(x)))
-    return x -> dropdims(x, dims=dimfun(x))
+    dims = if !ismissing(np_axes)
+        NumPyAxes(Tuple(np_axes))
+    else
+        np_axes
+    end
+    return Squeeze(dims)
 end
+
+"""
+    Unsqueeze(dims)
+
+Callable struct which performs `reshape` on input using the provided `dims` where `dims` is compliant with the ONNX OP `Unsqueeze` (meaning it can use numpy indexing).
+    
+Mainly exists for pretty printing reaons though as its task can be performed by partially applied functions.
+
+Designed to only be used when deserializing the `Unsqueeze` operation. 
+"""
+struct Unsqueeze{D}
+    dims::D
+end
+
+(u::Unsqueeze)(x) = unsqueeze_onnx(x, u.dims)
+
+function Base.show(io::IO, s::Unsqueeze)
+    print(io, "Unsqueeze(dims=")
+    ioc = IOContext(io, :prefix => "[", :suffix=>"]") 
+    show(ioc, s.dims)
+    print(io, ")")
+end
+
+invariantops[:Unsqueeze] = function(params)
+    haskey(params, :axes) || throw(ArgumentError("Must supply axes for Unsqueeze!"))
+    return Unsqueeze(NumPyAxes(params[:axes]))
+end
+
+unsqueeze_onnx(x, np_axes) = reshape(x, insdims(size(x), np_axes))
+
+struct Sorted{T}
+    vals::T
+    function Sorted(x)
+        vals = issorted(x) ? x : sort(x)
+        new{typeof(vals)}(vals) 
+    end
+end
+Base.getindex(s::Sorted, args...) = Base.getindex(s.vals, args...)
+Base.length(s::Sorted) = length(s.vals)
+
+# Probably premature optimization: Allow for users to avoid numpy2fluxdim and sorting if they really want to.
+
+function insdims(orgsize, np_axes::NumPyAxes; ndimsout=length(orgsize) + length(np_axes), kwargs...) 
+    insdims(orgsize, numpy2fluxdim(np_axes, ndimsout); ndimsout, kwargs...)
+end
+
+insdims(orgsize, dimstoadd; kwargs...) = insdims(orgsize, Sorted(dimstoadd); kwargs...)
+insdims(orgsize, dims::Sorted; ndimsout=length(orgsize) + length(dims), inssize=Returns(1)) = let 
+    currax = Ref(1)
+    dimoffs = Ref(0)
+    ntuple(ndimsout) do i
+        if currax[] <= length(dims) && dims[currax[]] == i
+            ins = inssize(currax[])
+            currax[] += 1
+            dimoffs[] += 1
+            ins
+        else
+            orgsize[i - dimoffs[]]
+        end
+    end
+end
+
 
 invariantops[:ReduceMean] = function(params)
     np_axes = get(params, :axes, missing)

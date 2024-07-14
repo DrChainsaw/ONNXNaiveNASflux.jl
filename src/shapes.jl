@@ -9,8 +9,44 @@ NaiveNASflux.actrank(::Shape1D) = 0
 # TODO: Move to NaiveNASflux
 NaiveNASflux.nin(sc::SkipConnection) = nin(sc.layers)
 
+"""
+    NumPyAxes(axes)
+
+Represents `axes` using numpy conventions, e.g. `0` means last dimension, `1` means second last and `-1` means first etc. due to row major vs column major indexing.
+
+Mainly intended to be used when deserializing ONNX OPs which operate along a provided set of dimensions to mark that we
+don't know yet how to translate the numpy axes to Julia axes.
+
+Primarily exists for pretty printing reasons so we can show which dimensions certain ops will operate along in a Julia compliant manner (e.g. numpy index `1` is shown as `end-1`).
+
+### Examples
+```julia-repl
+julia> ONNXNaiveNASflux.NumPyAxes([0, 1, 2, -1, -2])
+NumPyAxes[end,end-1,end-2,1,2]
+```
+"""
+struct NumPyAxes{AX}
+    axes::AX
+end
+# This is cute, but generally not needed since all ops which make use of this need to supply some dims argument
+# which is pretty much always required to be a Tuple or an Int by some method quite high up in the call stack.
+#Base.to_index(x::AbstractArray, npa::NumPyAxes) = numpy2fluxdim.(collect(npa.axes), ndims(x)) 
+Base.length(npa::NumPyAxes) = length(npa.axes)
+
+function Base.show(io::IO, npa::NumPyAxes)
+    print(io, get(io, :prefix, "NumPyAxes["))
+    indstr = map(npa.axes) do ax
+        ax === 0 && return "end"
+        ax > 0 && return string("end-", ax)
+        -ax
+    end
+    print(io, join(indstr, ','))
+    print(io, get(io, :suffix, "]"))
+end
+
 numpy2fluxdim(np_axis, v::AbstractVertex) = numpy2fluxdim(np_axis, 1 + NaiveNASflux.actrank(v)[1])
-numpy2fluxdim(np_axis, ndims) = np_axis >= 0 ? ndims - np_axis : abs(np_axis)
+numpy2fluxdim(npa::NumPyAxes, ndims::Integer) = numpy2fluxdim.(npa.axes, ndims)
+numpy2fluxdim(np_axis, ndims) = np_axis >= 0 ? ndims - np_axis : -np_axis
 
 flux2numpydim(dim, ndims) = ndims - dim
 

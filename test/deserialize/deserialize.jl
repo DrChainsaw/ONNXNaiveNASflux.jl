@@ -22,7 +22,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(sources, optype(node))
-        res = sources[optype(node)](node.attribute, params(node)...)
+        res = sources[optype(node)](node.attribute, Flux.params(node)...)
 
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -119,7 +119,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(fluxlayers, optype(node))
-        op = fluxlayers[optype(node)](node.attribute, params(node)...)
+        op = fluxlayers[optype(node)](node.attribute, Flux.params(node)...)
 
         res = op(Float32.(inputs[1]))
         @test size(res) == size(outputs[1])
@@ -164,11 +164,11 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(actfuns, optype(node))
-        op = actfuns[optype(node)](node.attribute, params(node)...)
+        op = actfuns[optype(node)](node.attribute, Flux.params(node)...)
         @test op.(inputs[1]) ≈ outputs[1]
 
         @test haskey(invariantops, optype(node))
-        bcop = invariantops[optype(node)](node.attribute, params(node)...)
+        bcop = invariantops[optype(node)](node.attribute, Flux.params(node)...)
         @test bcop(inputs[1]) ≈ outputs[1]
 
     end
@@ -216,13 +216,21 @@ end
     (name="test_softmax_negative_axis", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_0", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_1", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_2", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_3", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_three_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_two_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_unsorted_axes", ninputs=1, noutputs=1, fd=invariantops),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(tc.fd, optype(node))
-        op = tc.fd[optype(node)](node.attribute, params(node)...)
+        op = tc.fd[optype(node)](node.attribute, Flux.params(node)...)
         res = op(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -416,5 +424,43 @@ end
         @test nout(inputs(g)[]) == nout(v1)
         @test nout(g[end]) == 60
         @test length(defaultutility(g[end])) == exputilsize
+    end
+
+    @testset "Squeeze" begin
+        import ONNXNaiveNASflux: Squeeze, NumPyAxes
+
+        # The top two are not hit through any other test
+        @test size(Squeeze((1,2))(reshape(ones(2,3), 1, 1, 2, 1, 3, 1))) == (2, 1, 3, 1)
+        @test size(Squeeze(missing)(reshape(ones(2,3), 1, 1, 2, 1, 3, 1))) == (2, 3)
+        @test size(Squeeze(NumPyAxes([-1, 0, 2]))(reshape(ones(2,3), 1, 1, 2, 1, 3, 1))) == (1, 2, 3)
+    end
+
+    @testset "Pretty printing" begin
+        import ONNXNaiveNASflux: NumPyAxes
+
+        @testset "NumPyAxes" begin
+            @test sprint(show, NumPyAxes([0, 1, 2, -1, 2])) == "NumPyAxes[end,end-1,end-2,1,end-2]"           
+        end
+
+        @testset "Squeeze" begin
+            import ONNXNaiveNASflux: Squeeze
+            @test sprint(show, Squeeze(NumPyAxes([0, 1, -2]))) == "Squeeze(dims=[end,end-1,2])"
+            @test sprint(show, Squeeze(missing)) == "Squeeze" 
+        end
+
+        @testset "Unsqueeze" begin
+            import ONNXNaiveNASflux: Unsqueeze
+            @test sprint(show, Unsqueeze(NumPyAxes([0, 1, -2]))) == "Unsqueeze(dims=[end,end-1,2])"
+        end
+
+        @testset "Reshape" begin
+            import ONNXNaiveNASflux: Reshape
+            @test sprint(show, Reshape((1, 2))) == "Reshape(dims=(1, 2))"
+        end
+
+        @testset "Flatten" begin
+            import ONNXNaiveNASflux: Flatten
+            @test sprint(show, Flatten(2)) == "Flatten(dim=2)"
+        end
     end
 end

@@ -3,9 +3,9 @@
     import ONNXNaiveNASflux: OnnxNode, input, output, optype, array
 
     function serdeser(p::T, convfun = cfun(p)) where T
-        iob = PipeBuffer();
+        iob = PipeBuffer()
         ONNX.writeproto(iob, p)
-        return convfun(ONNX.readproto(iob, T()))
+        return convfun(ONNX.readproto(iob, T))
     end
 
     function serdeser(p::ONNX.ModelProto)
@@ -26,6 +26,7 @@
         using ONNXNaiveNASflux.NaiveNASflux
         import ONNXNaiveNASflux.NaiveNASflux: weights, bias
         import ONNXNaiveNASflux: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape
+        import Flux: unsqueeze
         struct NodeProbe{F, S} <: AbstractProbe
             name::String
             namefun::F
@@ -80,9 +81,10 @@
         end
 
         @testset "Dims method $(tc.ot)" for tc in (
-            (f=cat, dims=1, ndims=2, ot=:Concat, axname=:axis),
-            (f=mean, dims=(2, 3), ndims=4, ot=:ReduceMean, axname=:axes),
-            (f=dropdims, dims=(3,), ndims=3, ot=:Squeeze, axname=:axes)
+            (f=cat, dims=1, expdims=1, ndims=2, ot=:Concat, axname=:axis),
+            (f=mean, dims=(2, 3), expdims=[2, 3], ndims=4, ot=:ReduceMean, axname=:axes),
+            (f=dropdims, dims=(3,), expdims=[3], ndims=3, ot=:Squeeze, axname=:axes),
+            (f=unsqueeze, dims=3, expdims=[3], ndims=3, ot=:Unsqueeze, axname=:axes),
             )
             inprobe = NodeProbe("input", f -> "output", Tuple(1:tc.ndims))
 
@@ -96,8 +98,14 @@
             @test output(res) == [name(outprobe)]
             @test optype(res) == tc.ot
             @test name(res) == name(outprobe)
-            expdims = tc.dims isa Tuple ? collect(tc.dims) : tc.dims
-            @test ONNXNaiveNASflux.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == expdims
+            @test ONNXNaiveNASflux.numpy2fluxdim.(res.attribute[tc.axname], tc.ndims) == tc.expdims
+            
+            x = ones(Float32, ntuple(Returns(1), tc.ndims))
+            invertex = convinputvertex(name(inprobe), 1, tc.ndims-1)
+            @test ONNXNaiveNASflux.verts[tc.ot](name(res), [invertex], res.attribute)(x) == tc.f(x; dims=tc.dims)
+
+            ortout, = onnxruntime_infer(x -> tc.f(x; dims=tc.dims), x)
+            @test ortout == tc.f(x; dims=tc.dims)
         end
 
         @testset "Reshape" begin
@@ -360,7 +368,10 @@
 
         bnvertex(name, inpt::AbstractVertex, actfun=identity) = fluxvertex(name, BatchNorm(nout(inpt), actfun), inpt)
 
-        mpvertex(name, inpt::AbstractVertex) = fluxvertex(name, MaxPool((2,2); pad=(1,0), stride=(1,2)), inpt)
+        maxpvertex(name, inpt::AbstractVertex) = fluxvertex(name, MaxPool((2,2); pad=(1,0), stride=(1,2)), inpt)
+
+        # TODO: Make which OP types shall be merged into a single vertex configurable... 
+        gmpvertex(name, inpt::AbstractVertex) = invariantvertex(name, x -> dropdims(GlobalMeanPool()(x); dims=(1,2)), inpt)
 
         fvertex(name, inpt::AbstractVertex, f) = invariantvertex(name, f, inpt)
 
@@ -379,12 +390,11 @@
             indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
 
             gp_org = if serialize_insizes
-                graphproto(g_org, name(inputs(g_org)[]) => size(indata); namestrat=ONNXNaiveNASflux.default_namestrat(g_org))
+                graphproto(g_org, name(inputs(g_org)[]) => size(indata); namestrat=ONNXNaiveNASflux.default_namestrat(g_org), name="testmodel")
             else
-                graphproto(g_org)
+                graphproto(g_org; name="testmodel")
             end
             
-            gp_org.name="testmodel"
             validate(modelproto(;graph=gp_org))
             gt_new = serdeser(gp_org)
 
@@ -501,7 +511,7 @@
             v0 = conv2dinputvertex("input", 3)
             v1 = convvertex("conv1", v0, 4, relu)
             v2 = convvertex("conv2", v1, 5, elu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v3 = gmpvertex("globalmeanpool", v2)
             v4 = dense("output", v3, 2)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
@@ -510,7 +520,7 @@
         @testset "Linear Conv graph with global pooling without names" begin
             v0 = conv2dinputvertex("input", 3)
             v1 = convvertex("", v0, 4, relu)
-            v2 = invariantvertex(x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))), v1)
+            v2 = gmpvertex("", v1)
 
             g_org = CompGraph(v0, v2)
 
@@ -531,7 +541,7 @@
             v0 = conv2dinputvertex("input", 3)
             v1 = convvertex("conv", v0, 4, relu)
             v2 = bnvertex("batchnorm", v1, elu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v3 = gmpvertex("globalmeanpool", v2)
             v4 = dense("output", v3, 2, selu)
 
             test_named_graph(CompGraph(v0, v4), (4,6))
@@ -539,9 +549,9 @@
 
         @testset "Linear Conv and MaxPool graph with global pooling" begin
             v0 = conv2dinputvertex("input", 3)
-            v1 = mpvertex("maxpool", v0)
+            v1 = maxpvertex("maxpool", v0)
             v2 = convvertex("conv", v1, 4, relu)
-            v3 = fvertex("globmeanpool", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v3 = gmpvertex("globalmeanpool", v2)
             v4 = dense("output", v3, 2, selu)
 
             test_named_graph(CompGraph(v0, v4), (2,3))
@@ -605,7 +615,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -648,7 +658,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -686,7 +696,7 @@
             v1 = convvertex("conv", v0, 2, elu)
             v2 = bnvertex("batchnorm", v0)
             v3 = concat("conc", v1, v2)
-            v4 = fvertex("globmeanpool", v3, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+            v4 = gmpvertex("globalmeanpool", v3)
             v5 = dense("output", v4, 2, relu)
 
             test_named_graph(CompGraph(v0, v5), (2,3))
@@ -829,7 +839,7 @@
                 v0 = conv2dinputvertex("input", 3)    
                 v1 = convvertex("v1", v0, 2)
                 v2 = concat("v2", v1, v0)
-                v3 = fvertex("v3", v2, x -> ONNXNaiveNASflux.globalmeanpool(x, y -> dropdims(y, dims=(1,2))))
+                v3 = gmpvertex("globalmeanpool", v2)
                 v4 = dense("v4", v3, 4)
 
                 g = remodel(CompGraph(v0, v4))
@@ -839,7 +849,7 @@
     end
 
     @testset "Models" begin
-        import ONNXNaiveNASflux: modelproto, sizes
+        import ONNXNaiveNASflux: modelproto, sizes, clean_size
 
         @testset "Generic function infer" begin
             _f(x, y) = x .+ y
@@ -883,7 +893,7 @@
             c_org = cfun(l)
 
             mt = modelproto(c_org) |> serdeser
-            ss = sizes(mt)
+            ss = clean_size(sizes(mt))
  
             @test ss["data_0"] == expshape
         end

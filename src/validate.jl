@@ -42,7 +42,7 @@ Test that operations are defined for each node. If not, an error message will be
 optypedefined(mp::ONNX.ModelProto, or=error) = optypedefined(mp.graph, or)
 function optypedefined(gp::ONNX.GraphProto, or=error)
     for n in gp.node
-        hasproperty(n, :op_type) || or("No op_type defined for $(errinfo(n))")
+        isempty(n.op_type) && or("No op_type defined for $(errinfo(n))")
     end
 end
 
@@ -87,6 +87,5 @@ end
 
 hasname(mp::ONNX.ModelProto, or=error) = hasname(mp.graph, or)
 function hasname(gp::ONNX.GraphProto, or=error)
-     hasproperty(gp, :name) || return or("Graph name not defined!")
      isempty(gp.name) && or("Graph name is empty string!")
  end

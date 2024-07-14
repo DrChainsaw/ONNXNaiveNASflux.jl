@@ -72,11 +72,11 @@ Broadcast.broadcastable(n::OnnxNode) = Ref(n)
 node(nodename::String, gb::CompGraphBuilder, parent=nothing) = get!(gb.allnodes, nodename) do
    # TODO: Handle this in some other way
    # Create a fake node to make 1<->1 mapping with NaiveNASflux which uses a special vertex type as output
-   inputnode = ONNX.NodeProto()
-   inputnode.input = AbstractString[]
-   inputnode.output = AbstractString[name(n) for n in values(gb.allnodes) if nodename in innames(n)]
-   inputnode.name = nodename
-   inputnode.op_type= "Input"
+   inputnode = ONNX.NodeProto(;
+                           input = AbstractString[],
+                           output = AbstractString[name(n) for n in values(gb.allnodes) if nodename in innames(n)],
+                           name = nodename,
+                           op_type= "Input")
 
    # We want nodes as well as layertypes in case we need to infer the size from the selected node
    # Unfortunate failure case: If the only way to see a valid fluxlayertype is through concatenation we will fail to infer the shape.

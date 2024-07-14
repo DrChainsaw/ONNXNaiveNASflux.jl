@@ -102,6 +102,7 @@ Sigmoid
 Softmax
 Squeeze
 Tanh
+Unsqueeze
 ```
 
 ## Adding Operations
