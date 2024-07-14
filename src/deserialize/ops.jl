@@ -214,19 +214,11 @@ invariantops[:GlobalAveragePool] = function(params)
 end
 fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxPoolLayer()
 
-function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
-    wrap(GlobalMeanPool()(x))
-end
-
 invariantops[:GlobalMaxPool] = function(params)
     wrap = get(params, :wrap, identity)
     return wrap ∘ GlobalMaxPool()
 end
 fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxPoolLayer()
-
-function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
-    wrap(GlobalMaxPool()(x))
-end
 
 """
     Squeeze(dims)
@@ -246,7 +238,7 @@ end
 
 Base.show(io::IO, ::Squeeze{Missing}) = print(io, "Squeeze")
 function Base.show(io::IO, s::Squeeze)
-    print(io, "Squeeze(")
+    print(io, "Squeeze(dims=")
     ioc = IOContext(io, :prefix => "[", :suffix=>"]") 
     show(ioc, s.dims)
     print(io, ")")
@@ -279,22 +271,18 @@ end
 (u::Unsqueeze)(x) = unsqueeze_onnx(x, u.dims)
 
 function Base.show(io::IO, s::Unsqueeze)
-    print(io, "Unsqueeze(")
+    print(io, "Unsqueeze(dims=")
     ioc = IOContext(io, :prefix => "[", :suffix=>"]") 
     show(ioc, s.dims)
     print(io, ")")
 end
 
-
 invariantops[:Unsqueeze] = function(params)
     haskey(params, :axes) || throw(ArgumentError("Must supply axes for Unsqueeze!"))
-    np_axes = params[:axes]
-    return Unsqueeze(NumPyAxes(np_axes))
+    return Unsqueeze(NumPyAxes(params[:axes]))
 end
 
 unsqueeze_onnx(x, np_axes) = reshape(x, insdims(size(x), np_axes))
-
-
 
 struct Sorted{T}
     vals::T

@@ -425,4 +425,42 @@ end
         @test nout(g[end]) == 60
         @test length(defaultutility(g[end])) == exputilsize
     end
+
+    @testset "Squeeze" begin
+        import ONNXNaiveNASflux: Squeeze, NumPyAxes
+
+        # The top two are not hit through any other test
+        @test size(Squeeze((1,2))(reshape(ones(2,3), 1, 1, 2, 1, 3, 1))) == (2, 1, 3, 1)
+        @test size(Squeeze(missing)(reshape(ones(2,3), 1, 1, 2, 1, 3, 1))) == (2, 3)
+        @test size(Squeeze(NumPyAxes([-1, 0, 2]))(reshape(ones(2,3), 1, 1, 2, 1, 3, 1))) == (1, 2, 3)
+    end
+
+    @testset "Pretty printing" begin
+        import ONNXNaiveNASflux: NumPyAxes
+
+        @testset "NumPyAxes" begin
+            @test sprint(show, NumPyAxes([0, 1, 2, -1, 2])) == "NumPyAxes[end,end-1,end-2,1,end-2]"           
+        end
+
+        @testset "Squeeze" begin
+            import ONNXNaiveNASflux: Squeeze
+            @test sprint(show, Squeeze(NumPyAxes([0, 1, -2]))) == "Squeeze(dims=[end,end-1,2])"
+            @test sprint(show, Squeeze(missing)) == "Squeeze" 
+        end
+
+        @testset "Unsqueeze" begin
+            import ONNXNaiveNASflux: Unsqueeze
+            @test sprint(show, Unsqueeze(NumPyAxes([0, 1, -2]))) == "Unsqueeze(dims=[end,end-1,2])"
+        end
+
+        @testset "Reshape" begin
+            import ONNXNaiveNASflux: Reshape
+            @test sprint(show, Reshape((1, 2))) == "Reshape(dims=(1, 2))"
+        end
+
+        @testset "Flatten" begin
+            import ONNXNaiveNASflux: Flatten
+            @test sprint(show, Flatten(2)) == "Flatten(dim=2)"
+        end
+    end
 end

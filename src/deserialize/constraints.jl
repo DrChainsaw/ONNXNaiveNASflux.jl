@@ -76,6 +76,13 @@ NaiveNASflux.layer(r::Reshape) = r
 NaiveNASflux.actdim(r::Reshape) = r.adim
 NaiveNASflux.actrank(r::Reshape) = length(r.dims)
 
+function Base.show(io::IO, s::Reshape)
+    print(io, "Reshape(dims=")
+    ioc = IOContext(io, :prefix => "[", :suffix=>"]") 
+    show(ioc, s.dims)
+    print(io, ")")
+end
+
 # If Reshape is wrapped in an AbstractMutableComp we will hit this method instead due to how NaiveNASflux unwraps things
 NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, ::Type{<:Reshape}, data) = NaiveNASlib.compconstraint!(case, s, layer(data.vertex), data) 
 
@@ -178,6 +185,13 @@ NaiveNASflux.actdim(f::Flatten) = 1
 NaiveNASflux.actrank(f::Flatten) = 1
 
 calc_outsize(::Flatten, v) = 0
+
+function Base.show(io::IO, s::Flatten)
+    print(io, "Flatten(dim=")
+    ioc = IOContext(io, :prefix => "[", :suffix=>"]") 
+    show(ioc, s.dim)
+    print(io, ")")
+end
 
 # If Flatten is wrapped in an AbstractMutableComp we will hit this method instead due to how NaiveNASflux unwraps things
 NaiveNASlib.compconstraint!(case, s::NaiveNASlib.AbstractJuMPΔSizeStrategy, ::Type{<:Flatten}, data) = NaiveNASlib.compconstraint!(case, s, layer(data.vertex), data) 
