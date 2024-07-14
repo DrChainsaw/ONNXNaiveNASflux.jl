@@ -216,6 +216,14 @@ end
     (name="test_softmax_negative_axis", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze", ninputs=1, noutputs=1, fd=invariantops),
     (name="test_squeeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_0", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_1", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_2", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_axis_3", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_negative_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_three_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_two_axes", ninputs=1, noutputs=1, fd=invariantops),
+    (name="test_unsqueeze_unsorted_axes", ninputs=1, noutputs=1, fd=invariantops),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)

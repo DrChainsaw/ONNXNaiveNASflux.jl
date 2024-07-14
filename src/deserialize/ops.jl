@@ -208,25 +208,24 @@ fluxlayertypes[:AveragePool] = (pars...) -> FluxPoolLayer()
 fluxlayers[:Dropout] = params -> Dropout(get(params, :ratio, 0.5))
 fluxlayertypes[:Dropout] = (pars...) -> FluxDropOut()
 
-
 invariantops[:GlobalAveragePool] = function(params)
     wrap = get(params, :wrap, identity)
-    return x -> globalmeanpool(x, wrap)
+    return wrap ∘ GlobalMeanPool()
 end
 fluxlayertypes[:GlobalAveragePool] = (pars...) -> FluxPoolLayer()
 
 function globalmeanpool(x::AbstractArray{T,N}, wrap) where T where N
-    wrap(MeanPool(size(x)[1:N-2])(x))
+    wrap(GlobalMeanPool()(x))
 end
 
 invariantops[:GlobalMaxPool] = function(params)
     wrap = get(params, :wrap, identity)
-    return x -> globalmaxpool(x, wrap)
+    return wrap ∘ GlobalMaxPool()
 end
 fluxlayertypes[:GlobalMaxPool] = (pars...) -> FluxPoolLayer()
 
 function globalmaxpool(x::AbstractArray{T,N}, wrap) where T where N
-    wrap(MaxPool(size(x)[1:N-2])(x))
+    wrap(GlobalMaxPool()(x))
 end
 
 invariantops[:Squeeze] = function(params)
@@ -234,6 +233,36 @@ invariantops[:Squeeze] = function(params)
     dimfun = ismissing(np_axes) ? x -> Tuple(findall(i -> i == 1, size(x))) : x -> Tuple(numpy2fluxdim.(np_axes, ndims(x)))
     return x -> dropdims(x, dims=dimfun(x))
 end
+
+invariantops[:Unsqueeze] = function(params)
+    haskey(params, :axes) || throw(ArgumentError("Must supply axes for Unsqueeze!"))
+    np_axes = params[:axes]
+    return unsqueeze_onnx(np_axes)
+end
+
+unsqueeze_onnx(np_axes) = Base.Fix2(unsqueeze_onnx, np_axes)
+function unsqueeze_onnx(x, np_axes)
+    reshape(x, insdims(size(x), np_axes))
+end
+
+insdims(orgsize, np_axes, inssize=Returns(1)) = let 
+    ndimsout = length(orgsize) + length(np_axes)
+    dimstoadd = numpy2fluxdim.(np_axes, ndimsout)
+    dimstoaddsorted = issorted(dimstoadd) ? dimstoadd : sort(dimstoadd)
+    currax = Ref(1)
+    dimoffs = Ref(0)
+    ntuple(ndimsout) do i
+        if currax[] <= length(dimstoaddsorted) && dimstoaddsorted[currax[]] == i
+            ins = inssize(currax[])
+            currax[] += 1
+            dimoffs[] += 1
+            ins
+        else
+            orgsize[i - dimoffs[]]
+        end
+    end
+end
+
 
 invariantops[:ReduceMean] = function(params)
     np_axes = get(params, :axes, missing)

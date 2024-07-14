@@ -501,8 +501,6 @@ end
 
 
 function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
-    fname = recursename(lowercase(optype), nextname(pps[1]))
-
     attrib = if isempty(dims)
         ONNX.AttributeProto[]
     else
@@ -511,6 +509,11 @@ function axisfun(fshape, optype, pps::AbstractProbe...; dims, axname="axes")
         np_axis = flux2numpydim.(dims, ndims(pok[1]))
         [ONNX.AttributeProto(axname, np_axis)]
     end
+    axisfun(fshape, optype, attrib, pps...)
+end
+
+function axisfun(fshape, optype, attrib::AbstractArray{<:ONNX.AttributeProto}, pps::AbstractProbe...)   
+    fname = recursename(lowercase(optype), nextname(pps[1]))
 
     add!(pps[1], ONNX.NodeProto(
         input = collect(name.(pps)),
@@ -580,20 +583,6 @@ function flatten(pp::AbstractProbe, dim)
     return newfrom(pp, fname, fshape)
 end
 
-Flux.unsqueeze(pp::AbstractProbe; dims::Int64) = unsqueeze(pp, dims)
+Flux.unsqueeze(pp::AbstractProbe; dims) = axisfun(s -> insdims(s, flux2numpydim.(dims, length(s))), "Unsqueeze", pp; dims=scal2tup(dims))
+unsqueeze_onnx(pp::AbstractProbe, np_axes) = axisfun(s -> insdims(s, np_axes), "Unsqueeze", [ONNX.AttributeProto("axes", np_axes)], pp)
 
-function unsqueeze(pp::AbstractProbe, dim)
-    fname = recursename("Unsqueeze", nextname(pp))
-
-    add!(pp, ONNX.NodeProto(
-        input=[name(pp)],
-        output=[fname],
-        name=fname,
-        attribute = [ONNX.AttributeProto("axes", [dim])],
-        op_type="Unsqueeze"))
-    
-    fshape = function (s)
-        return (s[1:dim-1]..., 1, s[dim:end]...)
-    end
-    return newfrom(pp, fname, fshape)
-end
