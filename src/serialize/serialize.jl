@@ -583,6 +583,6 @@ function flatten(pp::AbstractProbe, dim)
     return newfrom(pp, fname, fshape)
 end
 
-Flux.unsqueeze(pp::AbstractProbe; dims) = axisfun(s -> insdims(s, flux2numpydim.(dims, length(s))), "Unsqueeze", pp; dims=scal2tup(dims))
-unsqueeze_onnx(pp::AbstractProbe, np_axes) = axisfun(s -> insdims(s, np_axes), "Unsqueeze", [ONNX.AttributeProto("axes", np_axes)], pp)
+Flux.unsqueeze(pp::AbstractProbe; dims) = axisfun(s -> insdims(s, dims), "Unsqueeze", pp; dims=scal2tup(dims))
+unsqueeze_onnx(pp::AbstractProbe, npa::NumPyAxes) = axisfun(s -> insdims(s, npa), "Unsqueeze", [ONNX.AttributeProto("axes", npa.axes)], pp)
 
