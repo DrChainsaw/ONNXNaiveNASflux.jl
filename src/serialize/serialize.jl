@@ -224,14 +224,25 @@ function add_outputs!(gp, namestrat, pps::Tuple)
     add_output!.(output_pps)
 end
 
-# Only purpose is to snag the name in case this is the naming strategy
-function (v::NaiveNASlib.MutationVertex)(pps::AbstractProbe...)
+# Stuff whose only purpose is to override the name in case this is the naming strategy
+function (v::MutationVertex)(pps::AbstractProbe...)
     ppsname = map(pps) do pp
         newnamestrat(pp, nextname(pp)(v))
     end
-    ppout = base(v)(ppsname...)
+    ppout = base(v)(ppsname...)   
     return newnamestrat(ppout, nextname(pps[1]))
 end
+
+function (c::Chain)(pp::AbstractProbe)
+    ppnext = pp
+    for (k, l) in zip(keys(c), c) 
+        ppnext = l(newnamestrat(ppnext, chainlayername(nextname(pp), k, l)))
+    end
+    return newnamestrat(ppnext, nextname(pp))
+end
+
+
+# End of stuff whose only purpose is to override the name in case this is the naming strategy 
 
 actfun(::FluxLayer, l) = l.σ
 function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.AttributeProto[])

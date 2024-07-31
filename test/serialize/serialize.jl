@@ -848,6 +848,111 @@
         end
     end
 
+    @testset "Chains" begin
+        import ONNXNaiveNASflux: modelproto
+
+        function remodel(m, args...; kwargs...)
+            pb = PipeBuffer()
+            save(pb, m, args...; kwargs...)
+            return load(pb)
+        end
+
+        @testset "Simple Chain" begin
+            org = Chain(Dense(1 => 2, relu), Dense(2 => 3, sigmoid), Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+        end
+
+        @testset "Simple Named Chain" begin
+            org = Chain(layer1 = Dense(1 => 2, relu), layer2 = Dense(2 => 3, sigmoid), layer3 = Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org)
+            @test name.(mp.graph.node) == ["layer1", "layer1_relu", "layer2", "layer2_sigmoid", "layer3"]
+        end
+
+        @testset "Simple Named Chain with name_runningnr" begin
+            org = Chain(layer1 = Dense(1 => 2, relu), layer2 = Dense(2 => 3, sigmoid), layer3 = Dense(3 => 4))
+            res = remodel(org; namestrat=ONNXNaiveNASflux.name_runningnr())
+
+            x = randn(Float32, 1, 4)            
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org, namestrat=ONNXNaiveNASflux.name_runningnr())
+            @test name.(mp.graph.node) == ["dense_0", "dense_0_relu", "dense_1", "dense_1_sigmoid", "dense_2"]
+        end
+
+        @testset "Nested Named Chain" begin
+            org = Chain(
+                        layer1 =Dense(1 => 2, relu), 
+                        layer2 = Dense(2 => 3, sigmoid), 
+                        inner = Chain(
+                            Dense(3 => 3, tanh),
+                            Dense(3=>3)), 
+                        layer3 = Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org)
+            @test name.(mp.graph.node) ==  ["layer1", "layer1_relu", "layer2", "layer2_sigmoid", "inner[1]", "inner[1]_tanh", "inner[2]", "layer3"]
+        end
+
+        @testset "Nested Named Chain Named Inner" begin
+            org = Chain(
+                        layer1 = Dense(1 => 2, relu), 
+                        layer2 = Dense(2 => 3, sigmoid), 
+                        inner = Chain(
+                            ilayer1 = Dense(3 => 3, tanh),
+                            ilayer2 = Dense(3=>3)), 
+                        layer3 = Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org)
+            @test name.(mp.graph.node) == ["layer1", "layer1_relu", "layer2", "layer2_sigmoid", "inner.ilayer1", "inner.ilayer1_tanh", "inner.ilayer2", "layer3"]
+        end
+
+        @testset "Nested Chain Named Inner" begin
+            org = Chain(
+                        Dense(1 => 2, relu), 
+                        Dense(2 => 3, sigmoid), 
+                        Chain(
+                            ilayer1 = Dense(3 => 3, tanh),
+                            ilayer2 = Dense(3=>3)), 
+                        Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org)
+            @test name.(mp.graph.node) == ["dense_0", "dense_0_relu", "dense_1", "dense_1_sigmoid", "dense_2", "dense_2_tanh", "dense_3", "dense_4"]
+        end
+
+        @testset "Named Chain Parallel" begin
+            org = Chain(
+                        layer1 =Dense(1 => 2, relu), 
+                        layer2 = Dense(2 => 3, sigmoid), 
+                        fork = Parallel(+, 
+                            Chain(
+                                Dense(3 => 3, tanh),
+                                Dense(3=>3)),
+                            Dense(3 => 3, elu),
+                            ),
+                        layer3 = Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org)
+            @test name.(mp.graph.node) == ["layer1", "layer1_relu", "layer2", "layer2_sigmoid", "fork[1]", "fork[1]_tanh", "fork[2]", "fork", "fork_elu", "fork_1", "layer3"]
+        end
+    end
+
     @testset "Models" begin
         import ONNXNaiveNASflux: modelproto, sizes, clean_size
 
