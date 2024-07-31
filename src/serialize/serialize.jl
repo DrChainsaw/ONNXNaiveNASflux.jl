@@ -105,6 +105,29 @@ Idea is that probe will "record" all seen operations based on how methods for th
 """
 abstract type AbstractProbe end
 
+nextshape(p::AbstractProbe, f::Function) = f(shape(p))
+Base.ndims(p::AbstractProbe) = length(shape(p))
+
+"""
+    WrappedProbe
+
+Abstract class which promises that it wraps another `AbstractProbe` to which it delegates most of its tasks. 
+"""
+abstract type WrappedProbe <: AbstractProbe end
+
+unwrap(p::WrappedProbe) = p.wrapped
+
+Base.Broadcast.broadcastable(p::WrappedProbe) = Ref(p)
+
+NaiveNASlib.name(p::WrappedProbe) = NaiveNASlib.name(unwrap(p))
+
+nextname(p::WrappedProbe) = nextname(unwrap(p))
+add!(p::WrappedProbe, args...) = add!(unwrap(p), args...)
+shape(p::WrappedProbe) = shape(unwrap(p))
+add_output!(p::WrappedProbe) = add_output!(unwrap(p))
+newnamestrat(p::WrappedProbe, args...) = rewrap(p, newnamestrat(unwrap(p), args...))
+newfrom(p::WrappedProbe, args...) = rewrap(p, newfrom(unwrap(p), args...))
+
 # Called by several activation functions
 Base.oftype(::AbstractProbe, x) = x
 
@@ -126,8 +149,9 @@ nextname(p::ProtoProbe) = p.nextname
 add!(p::ProtoProbe, n) = add!(p.graph, n)
 shape(p::ProtoProbe) = p.shape
 add_output!(p::ProtoProbe) = push!(p.graph.output, ONNX.ValueInfoProto(name(p), shape(p)))
-Base.ndims(p::AbstractProbe) = length(shape(p))
-function inputprotoprobe!(gp, name, shape, namestrat)
+
+inputprotoprobe!(args...) = _inputprotoprobe!(args...)
+function _inputprotoprobe!(gp, name, shape, namestrat)
     push!(gp.input, ONNX.ValueInfoProto(name, shape))
     ProtoProbe(name, shape, namestrat, gp)
 end
@@ -145,11 +169,71 @@ newnamestrat(p::ProtoProbe, f, pname=p.name) = ProtoProbe(pname, p.shape, f, p.g
 Return a new `ProtoProbe` with name `outname`. Argument `fshape` is used to determine a new shape (typically a function).
 """
 newfrom(p::ProtoProbe, outname::AbstractString, fshape) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
-nextshape(p::AbstractProbe, f::Function) = f(shape(p))
 
 add!(gp::ONNX.GraphProto, np::ONNX.NodeProto) = push!(gp.node, np)
 
 add!(gp::ONNX.GraphProto, tp::ONNX.TensorProto) = push!(gp.initializer, tp)
+
+## Don't forget to check if new methods need to be added for any WrappedProbe implementations if you add something here!
+
+# Stuff whose only purpose is to override the name in case this is the naming strategy
+# See namingutil for a little story about the design since it is a bit messy :(
+
+"""
+    NameInterceptProbe <: WrappedProbe
+
+An AbstractProbe which is only used to intercept methods call above the primitive level to catch names (e.g. a `Chain` with a `NamedTuple` as layers).
+"""
+struct NameInterceptProbe{P<:AbstractProbe} <: WrappedProbe
+    wrapped::P
+end
+rewrap(::NameInterceptProbe, p) = NameInterceptProbe(p)
+
+inputprotoprobe!(gp, name, shape, namestrat::NamedNodeContext) = NameInterceptProbe(_inputprotoprobe!(gp, name, shape, namestrat))
+
+# This little dance is just to avoid ambiguities of (n::NamedNode)(pps...) since NamedNode is abstract
+# TODO: Generate with macro so we can add types to the union without worry? 
+(v::MutationVertex)(pps::AbstractProbe...) = _apply_probe_call(v, pps...)
+(n::NamedFunction)(pps::AbstractProbe...) = _apply_probe_call(n, pps...)
+
+_apply_probe_call(n::NamedNode, pps::AbstractProbe...) = __apply_probe_call(n, nextname(first(pps)), pps...)
+
+# We are not in the business of catching names here, so just forward the call
+__apply_probe_call(n::NamedNode, ::Any, pps::AbstractProbe...) = base(n)(pps...)
+# We just want to rewrap probes in NameInterceptProbes for the sole reason that we might encounter other 
+# objects that we want to intercept names from (e.g. a Chain inside a Parallel)
+__apply_probe_call(n::NamedNode, ::NamedNodeContext, pps::AbstractProbe...) = _apply_probe_call(n, map(NameInterceptProbe, pps)...)
+
+function _apply_probe_call(n::NamedNode, pps::NameInterceptProbe...)
+    ppsname = map(pps) do pp
+        newnamestrat(pp, nextname(pp)(n))
+    end
+    ppout = base(n)(ppsname...)
+    return newnamestrat(ppout, nextname(pps[1]))
+end
+
+# Here we wrap all callable children in a NamedFunction so that we can access the name when the child is called
+(c::Chain)(pp::NameInterceptProbe) = _instrument_named_functor(c; addbasename=false)(unwrap(pp))
+(p::Parallel)(pp::NameInterceptProbe) = _instrument_named_functor(p; addbasename=false)(unwrap(pp))
+(p::SkipConnection)(pp::NameInterceptProbe) = _instrument_named_functor(p; addbasename=false)(unwrap(pp))
+
+# The exclude is to ensure that we only see the fields of w, not the fields of its children
+_instrument_named_functor(w; addbasename=true) = Functors.fmap_with_path(w; exclude = (k,c) -> c != w) do keypath, child
+    _instrument_named_child(child, string(only(keypath)); addbasename)
+end
+
+_instrument_named_child(child, name; kwargs...) = !isempty(methods(child)) ? NamedFunction(child, name) : child
+_instrument_named_child(child::Tuple, name; addbasename) = ntuple(length(child)) do i
+    _instrument_named_child(child[i], string(addbasename ? name : "", '[', i, ']'))
+end
+_instrument_named_child(child::AbstractArray, name; addbasename) = map(enumerate(child)) do (i, elem)
+    _instrument_named_child(elem, string(addbasename ? name : "", '[', i, ']'))
+end
+_instrument_named_child(child::NamedTuple{K}, name; addbasename) where K = ntuple(length(child)) do i
+    _instrument_named_child(child[i], string(addbasename ? string(name, '.') : "", K[i]))
+end |> NamedTuple{K}
+
+# End of stuff whose only purpose is to override the name in case this is the naming strategy 
 
 
 """
@@ -224,25 +308,6 @@ function add_outputs!(gp, namestrat, pps::Tuple)
     add_output!.(output_pps)
 end
 
-# Stuff whose only purpose is to override the name in case this is the naming strategy
-function (v::MutationVertex)(pps::AbstractProbe...)
-    ppsname = map(pps) do pp
-        newnamestrat(pp, nextname(pp)(v))
-    end
-    ppout = base(v)(ppsname...)   
-    return newnamestrat(ppout, nextname(pps[1]))
-end
-
-function (c::Chain)(pp::AbstractProbe)
-    ppnext = pp
-    for (k, l) in zip(keys(c), c) 
-        ppnext = l(newnamestrat(ppnext, chainlayername(nextname(pp), k, l)))
-    end
-    return newnamestrat(ppnext, nextname(pp))
-end
-
-
-# End of stuff whose only purpose is to override the name in case this is the naming strategy 
 
 actfun(::FluxLayer, l) = l.σ
 function weightlayer(lt::FluxParLayer, l, pp, optype;attributes = ONNX.AttributeProto[])
@@ -430,7 +495,7 @@ globalmaxpool(pp::AbstractProbe, wrap) = globalpool(pp, wrap, "GlobalMaxPool")
 
 function globalpool(pp::AbstractProbe, wrap, type)
      gpp = attribfun(s -> ismissing(s) ? s : (1, 1, s[3:end]...), type, pp)
-     ppnext = newnamestrat(gpp, f -> join([gpp.name, genname(f)], "_"), gpp.name)
+     ppnext = newnamestrat(gpp, f -> join([name(gpp), genname(f)], "_"), name(gpp))
      wpp = wrap(ppnext)
      return newnamestrat(wpp, nextname(gpp))
 end
