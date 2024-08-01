@@ -887,7 +887,7 @@
 
         @testset "Nested Named Chain" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         inner = Chain(
                             Dense(3 => 3, tanh),
@@ -903,7 +903,7 @@
 
         @testset "Nested Named Chain Array" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         inner = Chain([
                             Dense(3 => 3, tanh),
@@ -970,7 +970,7 @@
 
         @testset "Named Chain Parallel" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         fork = Parallel(+, 
                             Chain(
@@ -989,7 +989,7 @@
 
         @testset "Named Chain Named Parallel" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         fork = Parallel(+, 
                             path1 = Chain(
@@ -1009,7 +1009,7 @@
 
         @testset "Named Chain Parallel Named Chain" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         fork = Parallel(+, 
                             Chain(
@@ -1032,7 +1032,7 @@
 
         @testset "Named Chain SkipConnection" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         fork = SkipConnection( 
                             Chain(
@@ -1050,7 +1050,7 @@
 
         @testset "Named Chain CompGraph" begin
             org = Chain(
-                        layer1 =Dense(1 => 2, relu), 
+                        layer1 = Dense(1 => 2, relu), 
                         layer2 = Dense(2 => 3, sigmoid), 
                         graph = let 
                             iv = denseinputvertex("graphin", 3)
