@@ -901,6 +901,22 @@
             @test name.(mp.graph.node) ==  ["layer1", "layer1_relu", "layer2", "layer2_sigmoid", "inner[1]", "inner[1]_tanh", "inner[2]", "layer3"]
         end
 
+        @testset "Nested Named Chain Array" begin
+            org = Chain(
+                        layer1 =Dense(1 => 2, relu), 
+                        layer2 = Dense(2 => 3, sigmoid), 
+                        inner = Chain([
+                            Dense(3 => 3, tanh),
+                            Dense(3=>3)]), 
+                        layer3 = Dense(3 => 4))
+            res = remodel(org)
+
+            x = randn(Float32, 1, 4)
+            @test org(x) == res(x) ≈ only(onnxruntime_infer(org, x))
+            mp = modelproto(org)
+            @test name.(mp.graph.node) ==  ["layer1", "layer1_relu", "layer2", "layer2_sigmoid", "inner[1]", "inner[1]_tanh", "inner[2]", "layer3"]
+        end
+
         @testset "Nested Named Chain Named Inner" begin
             org = Chain(
                         layer1 = Dense(1 => 2, relu), 
