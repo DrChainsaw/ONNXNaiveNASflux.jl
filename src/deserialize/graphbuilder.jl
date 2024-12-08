@@ -60,6 +60,8 @@ function output_to_node(nodes, initdict)
       ps = params(nodeproto, initdict)
       node = OnnxNode(nodeproto, ps)
       for outname in output(node)
+         # TODO: Custom error type for this
+         @assert outname ∉ keys(allnodes) "Duplicate output name found: $(outname)!" 
          allnodes[outname] = node
       end
    end
@@ -186,6 +188,6 @@ end
 optype(n::ONNX.NodeProto) = Symbol(n.op_type)
 optype(n::OnnxNode) = optype(n.proto)
 
-Flux.params(n::ONNX.NodeProto, initdict) = params(Val(optype(n)), n, initdict)
-Flux.params(::Val, n::ONNX.NodeProto, initdict) = map(pname -> initdict[pname], setdiff(input(n), innames(n))) # Inputs which are not other vertices
-Flux.params(n::OnnxNode) = n.params .|> array 
+params(n::ONNX.NodeProto, initdict) = params(Val(optype(n)), n, initdict)
+params(::Val, n::ONNX.NodeProto, initdict) = map(pname -> initdict[pname], setdiff(input(n), innames(n))) # Inputs which are not other vertices
+params(n::OnnxNode) = n.params .|> array 

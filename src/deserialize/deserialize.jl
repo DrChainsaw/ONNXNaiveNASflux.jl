@@ -39,12 +39,14 @@ Inputs to the returned vertex are created recursively based on state in `gb`.
 function vertex(gb::CompGraphBuilder, n::OnnxNode, vfun = create_vertex_default)
       return get!(gb.created, n) do
          n_create, ins = check_combine(gb, n)
-         invertices = map(ni -> vertex(gb, ni, vfun), ins)
-         v = vfun(n_create, invertices)
-         if is_input(v)
-            push!(gb.inputs, v)
+         get!(gb.created, n_create) do
+            invertices = map(ni -> vertex(gb, ni, vfun), ins)
+            v = vfun(n_create, invertices)
+            if is_input(v)
+               push!(gb.inputs, v)
+            end
+            return v
          end
-         return v
       end
 end
 

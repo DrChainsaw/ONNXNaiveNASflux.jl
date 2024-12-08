@@ -149,21 +149,35 @@ actlayers[:InstanceNormalization] = function(params, γ, β)
 end
 fluxlayertypes[:InstanceNormalization] = (pars...) -> FluxInstanceNorm()
 
-fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
+fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = nothing)
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
+    if !isnothing(h3d)
+        # We could probably create some wrapper struct for this if anyone ever needs it...
+        @warn "Got initial hidden state for RNN. This can't be stored in Flux > 0.15 and will be ignored."
+    end
 
-    Wi,Wh,b,h = recurrent_arrays(FluxRnn(), Wi_WBi, Wh_WBh, Wb_Rb, h3d)
+    Wi,Wh,b = recurrent_arrays(FluxRnnCell(), Wi_WBi, Wh_WBh, Wb_Rb)
     act = rnnactfuns[Symbol(get(params, :activations, ["Tanh"])[])](1, params)
-    cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(h), 0))
-    return Flux.Recur(cell, h)
+    cell = Flux.RNNCell(act, Wi, Wh, b)
+    return Flux.RNN(cell)
 end
 fluxlayertypes[:RNN] = (pars...) -> FluxRnn()
 
 
-fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, 8), c3d=default_init_h(Wb_Rb,8), peep=nothing)
+fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = nothing, c3d = nothing, peep=nothing)
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
     @assert isnothing(peep) "Peepholes not supported!" # Or?
-    Wi,Wh,b,h,c = recurrent_arrays(FluxLstm(), Wi_WBi, Wh_WBh, Wb_Rb, h3d, c3d)
+    if !isnothing(h3d)
+        # We could probably create some wrapper struct for this if anyone ever needs it...
+        @warn "Got initial hidden state for LSTM. This can't be stored in Flux > 0.15 and will be ignored."
+    end
+    
+    if !isnothing(c3d)
+        # We could probably create some wrapper struct for this if anyone ever needs it...
+        @warn "Got initial cell state for LSTM. This can't be stored in Flux > 0.15 and will be ignored."
+    end
+
+    Wi,Wh,b = recurrent_arrays(FluxLstmCell(), Wi_WBi, Wh_WBh, Wb_Rb)
     # Flux only supports default activation functions
     # We can only check that given values doesn't deviate
     supported = [:Sigmoid, :Tanh, :Tanh]
@@ -174,8 +188,8 @@ fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_R
 
     # b, h and c must all be of the same type when creating a cell, but
     # it is actually Recur which has the state
-    cell = Flux.LSTMCell(Wi, Wh, b, (fill!(similar(h), 0), fill!(similar(c), 0)))
-    return Flux.Recur(cell, (h, c))
+    cell = Flux.LSTMCell(Wi, Wh, b)
+    return Flux.LSTM(cell)
 end
 fluxlayertypes[:LSTM] = (pars...) -> FluxLstm()
 

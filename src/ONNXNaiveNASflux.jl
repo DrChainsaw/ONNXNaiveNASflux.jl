@@ -5,14 +5,14 @@ include("baseonnx/BaseOnnx.jl")
 import .BaseOnnx: array
 const ONNX = BaseOnnx
 using Flux
-using Flux: params
 import Functors
 using NaiveNASflux
 using NaiveNASflux: weights, bias
 using NaiveNASflux: indim, outdim, actdim, actrank, layertype, wrapped
 using NaiveNASflux: FluxLayer, FluxParLayer, FluxNoParLayer, FluxDense, FluxConvolutional, FluxConv, FluxConvTranspose,
-                    FluxBatchNorm, FluxInstanceNorm, FluxRecurrent, FluxRnn, FluxLstm, FluxGru, FluxTransparentLayer, 
-                    FluxPoolLayer, FluxDropOut, Flux2D, GenericFluxConvolutional, GenericFlux2D, GenericFluxRecurrent
+                    FluxBatchNorm, FluxInstanceNorm, FluxRecurrent, FluxRecurrentCell, FluxRnn, FluxRnnCell, FluxLstm,
+                    FluxLstmCell, FluxGru, FluxGruCell, FluxTransparentLayer, FluxPoolLayer, FluxDropOut, Flux2D, 
+                    GenericFluxConvolutional, GenericFlux2D, GenericFluxRecurrent
 using Setfield
 using Statistics
 import Pkg

@@ -341,7 +341,8 @@ end
 function(l::Flux.Dense)(pp::AbstractProbe)
     ppl = pp
     if !ismissing(shape(pp)) && ndims(pp) == 3
-        # Special case: Recurrent -> Dense. This is nothing special in flux as recurrent layers do 2D -> 2D
+        # Special case: Recurrent -> Dense. This is nothing special in flux as the dense layers automatically broadcast
+        # through all dimensions except the first.
         # For it to be valid ONNX however we need to add a reshape so that time dimension becomes batch dimension
         outsize = shape(pp)[1]
         lname = recursename(l, nextname(pp))
@@ -410,10 +411,11 @@ actfun(::FluxInstanceNorm, l) = l.λ
 # Dropdims because ONNX expects recurrent layers to output tensors of shape [seq_length, num_directions, batch_size, hidden_size] where num_directions is 2 in case of bidirectional and 1 otherwise
 # Flux.Recur is not bidirectional so we'll just assume the user wants to also drop num_directions so that recurrent layers can be stacked without hassle.
 # Override Flux.Recur with some other method to circumvent this behaviour if not wanted
-(m::Flux.Recur)(pps::AbstractProbe...) = dropdims(m.cell(m.state, pps...), dims=3)
+(m::Flux.RNN)(pps::AbstractProbe...) = dropdims(m.cell(pps...); dims=3)
+(m::Flux.LSTM)(pps::AbstractProbe...) = dropdims.(m.cell(pps...); dims=3)
 
-(l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
-(l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
+(l::Flux.RNNCell)(pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
+(l::Flux.LSTMCell)(pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
 
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
@@ -433,10 +435,10 @@ function recurrent_node(l, pp, optype)
     Wh = permutedims(flipweights(layertype(l), l.Wh, hsize))
     add!(pp, ONNX.TensorProto(reshape(Wh, size(Wh)..., 1), rname))
 
-    if !isa(l.b, Number)
+    if !isa(bias(l), Number)
         # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
         # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
-        b = flipweights(layertype(l), reshape(l.b, :, 1), hsize)
+        b = flipweights(layertype(l), reshape(bias(l), :, 1), hsize)
         add!(pp, ONNX.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
         push!(inputnames, bname)
     end
@@ -447,13 +449,18 @@ function recurrent_node(l, pp, optype)
         name=lname,
         attribute = push!(activation_attrib(l), hsattrib),
         op_type=optype))
-
+    # ONNX recurrent layers have multiple outputs, but Flux is generally only compatible
+    # with the first output (the hidden state for all timesteps).
+    # Even though Flux.LSTM also outputs the cell state, it does so for all timesteps
+    # while ONNX only does so for the last timestep.
+    # I guess that in theory we could support models which immediately remove all but
+    # the last timestamp from the cell state, but it seems like it would be hell to
+    # resolve this when importing so I'm not gonna bother right now.
     return newfrom(pp, lname, s -> outshape(l, s))
 end
 
-
 activation_attrib(l) = l.σ(ActivationAttributeProbe())
-activation_attrib(l::Flux.LSTMCell) = ONNX.AttributeProto[] #Only default values supported by Flux
+activation_attrib(::Flux.LSTMCell) = ONNX.AttributeProto[] #Only default values supported by Flux
 
 Base.tanh(::ActivationAttributeProbe) = rnnactattribs("Tanh")
 Flux.elu(::ActivationAttributeProbe, α=1f0) = rnnactattribs("Elu", α)

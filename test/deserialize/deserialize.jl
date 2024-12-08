@@ -1,4 +1,4 @@
-import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes, array
+import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes, array, params
 using ONNXNaiveNASflux.NaiveNASflux
 
 # Logging to avoid CI timeouts
@@ -22,7 +22,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(sources, optype(node))
-        res = sources[optype(node)](node.attribute, Flux.params(node)...)
+        res = sources[optype(node)](node.attribute, params(node)...)
 
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
@@ -44,23 +44,14 @@ end
     end
 end
 
-# For testing since ONNX states that recurrent layers take 3D input while flux uses
-# an Array of 2D Arrays
-function (l::Flux.Recur)(x::AbstractArray{T, 3}) where T
-    # ONNX shape for RNNs inputs is [seq_length, batch_size, input_size]
-    # ONNX.jl reverses this to [input_size, batch_size, seq_length]
-    # Unstacking it to a sequence of [input_size, batch_size]
-    inseq =Flux.unstack(x;dims=3)
-    out = nothing
-    for inpt in inseq
-         out = l(inpt)
-     end
-    # Just to turn it back to ONNX shape.
-    # In the testdata only the last output in the sequence is present in the reference
-    return reshape(out, size(out)..., 1)
-end
-
 @info "  Test Flux layers"
+
+# ONNX puts batch dimension in the middle and time steps last while Flux has time steps in middle and batch last
+recurrent_remap(x::AbstractArray{T, 3}) where T = permutedims(x, (1, 3, 2))
+recurrent_remap(x) = x
+
+recurrent_last_step(x::AbstractArray{T, 3}) where T = x[:, end:end, :] 
+
 
 @testset "Fluxlayer $(tc.name)" for tc in
     (
@@ -101,8 +92,8 @@ end
     (name="test_gemm_transposeB", ninputs=3, noutputs=1),
     (name="test_instancenorm_epsilon", ninputs=3, noutputs=1),
     (name="test_instancenorm_example", ninputs=3, noutputs=1),
-    (name="test_lstm_defaults", ninputs=3, noutputs=1),
-    (name="test_lstm_with_initial_bias", ninputs=4, noutputs=1),
+    (name="test_lstm_defaults", ninputs=3, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_last_step ∘ first),
+    (name="test_lstm_with_initial_bias", ninputs=4, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_last_step ∘ first),
     # (name="test_lstm_with_peepholes", ninputs=8, noutputs=1), Not supported!
     (name="test_maxpool_1d_default", ninputs=1, noutputs=1),
     #(name="test_maxpool_2d_ceil", ninputs=1, noutputs=1), Not supported!
@@ -112,23 +103,32 @@ end
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
-    (name="test_rnn_seq_length", ninputs=4, noutputs=1),
+    (name="test_rnn_seq_length", ninputs=4, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_last_step),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
 
+    inputs = map(get(tc, :inputmap, identity), inputs)
+    outputs = map(get(tc, :outputmap, identity), outputs)
+
+    resultmap = get(tc, :resultmap, identity)
+
+    if length(outputs) > 1
+        @show tc.name
+    end
+
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(fluxlayers, optype(node))
-        op = fluxlayers[optype(node)](node.attribute, Flux.params(node)...)
+        op = fluxlayers[optype(node)](node.attribute, params(node)...)
 
-        res = op(Float32.(inputs[1]))
+        res = resultmap(op(Float32.(inputs[1])))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
 
     @testset "$(tc.name) graph" begin
         cg = load(model)
-        res = cg(Float32.(inputs[1]))
+        res = resultmap(cg(Float32.(inputs[1])))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
 
@@ -136,7 +136,7 @@ end
         io = PipeBuffer()
         save(io, cg)
         cg = load(io)
-        res = cg(Float32.(inputs[1]))
+        res = resultmap(cg(Float32.(inputs[1])))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end
@@ -164,11 +164,11 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(actfuns, optype(node))
-        op = actfuns[optype(node)](node.attribute, Flux.params(node)...)
+        op = actfuns[optype(node)](node.attribute, params(node)...)
         @test op.(inputs[1]) ≈ outputs[1]
 
         @test haskey(invariantops, optype(node))
-        bcop = invariantops[optype(node)](node.attribute, Flux.params(node)...)
+        bcop = invariantops[optype(node)](node.attribute, params(node)...)
         @test bcop(inputs[1]) ≈ outputs[1]
 
     end
@@ -230,7 +230,7 @@ end
 
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(tc.fd, optype(node))
-        op = tc.fd[optype(node)](node.attribute, Flux.params(node)...)
+        op = tc.fd[optype(node)](node.attribute, params(node)...)
         res = op(inputs[1])
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]

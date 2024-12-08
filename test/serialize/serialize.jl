@@ -244,8 +244,8 @@
         end
 
         @testset "$(tc.layer) node" for tc in (
-            (layer=RNN(3, 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:12), :, 4) .- 3),
-            (layer=LSTM(4, 3), indata = reshape(collect(Float32, 1:12), 4, :) .- 3),
+            (layer=RNN(3 => 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:24), :, 2, 4) .- 3),
+            (layer=LSTM(4 => 3), indata = reshape(collect(Float32, 1:24), 4, 2, :) .- 3, resultmap=first),
             )
             import ONNXNaiveNASflux.NaiveNASflux: hiddenweights
 
@@ -273,14 +273,20 @@
             @test hiddenweights(res) ≈ hiddenweights(tc.layer)
             @test bias(res) ≈ bias(res)
 
-            resout = res(tc.indata)
-            expout = tc.layer(tc.indata)
+            # Since Flux LSTM outputs both hidden and cell state and onnxruntime seems to just output the hidden
+            resultmap = get(tc, :resultmap, identity) 
+
+            resout = resultmap(res(tc.indata))
+            expout = resultmap(tc.layer(tc.indata))
 
             @test size(resout) == size(expout)
             @test resout ≈ expout
 
-            ortout, = onnxruntime_infer(tc.layer, reshape(tc.indata,size(tc.indata)...,1))
-            ortout = dropdims(ortout; dims=3)
+            # Permute dims here since onnx wants [timesteps, batchsize, features] while flux wants [features, timesteps, batchsize]
+            # Note that onnxruntime_infer reveres the dimensions for all inputs, so when we feed it [features, batchsize, timesteps]
+            # it will do the reversal of the dimensions to [timesteps, batchsize, features]
+            ortout, = onnxruntime_infer(tc.layer, permutedims(tc.indata, (1, 3, 2)))
+            ortout = permutedims(ortout, (1, 3, 2))
 
             @test size(ortout) == size(expout)
             @test ortout ≈ expout
@@ -361,8 +367,8 @@
         using ONNXNaiveNASflux: graphproto, modelproto, validate, AbstractVertex
         using NaiveNASflux: AbstractMutableComp
 
-        dense(name, inpt::AbstractVertex, outsize, actfun=identity) = fluxvertex(name, Dense(nout(inpt), outsize, actfun), inpt)
-        dense(inpt::AbstractVertex, outsize, actfun=identity) = fluxvertex(Dense(nout(inpt), outsize, actfun), inpt)
+        dense(name, inpt::AbstractVertex, outsize, actfun=identity; kwargs...) = fluxvertex(name, Dense(nout(inpt), outsize, actfun), inpt; kwargs...)
+        dense(inpt::AbstractVertex, outsize, actfun=identity; kwargs...) = fluxvertex(Dense(nout(inpt), outsize, actfun), inpt; kwargs...)
 
         convvertex(name, inpt::AbstractVertex, outsize, actfun=identity) = fluxvertex(name, Conv((1,1), nout(inpt) => outsize, actfun), inpt)
 
@@ -375,19 +381,21 @@
 
         fvertex(name, inpt::AbstractVertex, f) = invariantvertex(name, f, inpt)
 
-        test_outputs(res::Tuple, exp, sizediff=0) = test_outputs(res[1], exp, sizediff)
-        test_outputs(res::Tuple, exp::Tuple, sizediff=0) = test_outputs.(res, exp, sizediff)
-        function test_outputs(res, exp, sizediff=0)
-            # Fix for differences in recurrent shapes. Flux ises 2D and onnx uses 3D
-            resadj = dropdims(res, dims=Tuple(ndims(res)-sizediff+1:ndims(res)))
+        recurrent_swap(x::AbstractArray{T, 3}) where T = permutedims(x, (1, 3, 2))
+        recurrent_swap(x) = x
+
+        test_outputs(res::Tuple, exp, args...) = test_outputs(res[1], exp, args...)
+        test_outputs(res::Tuple, exp::Tuple, args...) = foreach((r, e) -> test_outputs(r, e, args...), res, exp)
+        function test_outputs(res, exp, resmap=identity)
+            resadj = resmap(res)
             @test size(resadj) == size(exp)
             @test resadj ≈ exp
         end
 
-        function test_named_graph(g_org, extradims = (); serialize_insizes=false)
+        function test_named_graph(g_org, extradims = (); timesteps=(), serialize_insizes=false, ortoutputmap=identity, ortinputmap=identity)
             outsize = nout(inputs(g_org)[])
             bs = 4
-            indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)), extradims..., outsize, :)
+            indata = reshape(collect(Float32, 1:outsize*bs*prod(extradims)*prod(timesteps)), extradims..., outsize, timesteps..., :)
 
             gp_org = if serialize_insizes
                 graphproto(g_org, name(inputs(g_org)[]) => size(indata); namestrat=ONNXNaiveNASflux.default_namestrat(g_org), name="testmodel")
@@ -409,13 +417,8 @@
 
             test_outputs(resout, expout)
 
-            # For FLux recurrent layers as they accept 2D input but ONNX wants 3D input
-            sizediff = length(ONNXNaiveNASflux.shape(inputs(g_new)[1])) - ndims(indata)
-            indata = reshape(indata, size(indata)..., ones(Int, sizediff)...)
-
-            ortout = onnxruntime_infer(g_org, indata)
-
-            test_outputs(ortout, expout, sizediff)
+            ortout = onnxruntime_infer(g_org, ortinputmap(indata))
+            test_outputs(ortout, expout, ortoutputmap)
 
             return g_new
         end
@@ -614,8 +617,7 @@
 
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v3), size(indata, 2))
-
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((g,x,y) -> Flux.mse(g(x), y), g_new, [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -658,7 +660,7 @@
             indata = reshape(collect(Float32, 1:3*4), nout(v0), :)
             outdata = ones(Float32, nout(v4), size(indata, 2))
 
-            Flux.train!((x,y) -> Flux.mse(g_new(x), y), Flux.params(g_new), [(indata, outdata)], Flux.Descent(0.6))
+            Flux.train!((g,x,y) -> Flux.mse(g(x), y), g_new, [(indata, outdata)], Flux.Descent(0.6))
             @test callcnt == nvertices(g_new) - 1
         end
 
@@ -723,33 +725,68 @@
 
         @testset "RNN to LSTM" begin
             v0 = rnninputvertex("input", 3)
-            v1 = fluxvertex("rnn", RNN(nout(v0), 4), v0)
-            v2 = fluxvertex("lstm", LSTM(nout(v1), 5), v1)
+            v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0)
+            v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1)
 
-            test_named_graph(CompGraph(v0, v2))
+            test_named_graph(CompGraph(v0, v2); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
         end
 
         @testset "Recurrent to Dense" begin
+            # With Flux 0.15 we need something to select the first output from LSTM since it now outputs both the hidden
+            # and the cell state.
+            struct SelectHidden{L} <: AbstractMutableComp
+                wrapped::L
+            end
+            NaiveNASflux.wrapped(l::SelectHidden) = l.wrapped
+            (l::SelectHidden)((h, c)::Tuple) = l.wrapped(h)
+            (l::SelectHidden)(x) = l.wrapped(x)
+
             v0 = rnninputvertex("input", 3)
-            v1 = fluxvertex("rnn", RNN(nout(v0), 4), v0)
-            v2 = fluxvertex("lstm", LSTM(nout(v1), 5), v1)
-            v3 = dense("dense", v2, 6, elu)
+            v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0)
+            v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1)
+            v3 = dense("dense", v2, 2, elu; layerfun=SelectHidden)
 
             g_org = CompGraph(v0, v3)
-            g_new = CompGraph(serdeser(graphproto(g_org)))
+
+            # We need to manually add back the SelectHidden when we recreate the graph
+            
+            # In theory we could try to implement general support for multi-output OPs in ONNX
+            # and just assume that such OPs in Julia output tuples (meaning that the next OP 
+            # accepts tuples).
+
+            # It is not clear to me though how to handle the non-trivial cases, for example
+            # if a node A has wants e.g output 3 from B, output 5 from C, output 1 from B
+            # output 3 from C and 4 from C in that order. What shall this poor package then
+            # assume about which of those shall be packed in tuples and which shall be given
+            # as individual arguments?
+
+            # This won't help us here though since Flux.LSTM outputs are not the same as
+            # ONNX LSTM outputs (except for the first output, i.e. the hidden state).
+            
+            # This can also maybe be worked around by adding some OPs and then detect
+            # that they are redundant when importing, but I'm not gonna bother with
+            # that unless someone really needs it...
+            vfun = function(node, inputvertices)
+                if name(node) == name(v3)
+                    ONNXNaiveNASflux.create_vertex_default(node, inputvertices; layerfun=SelectHidden)
+                else
+                    ONNXNaiveNASflux.create_vertex_default(node, inputvertices)
+                end
+            end
+            g_new = CompGraph(serdeser(graphproto(g_org)); vfun)
 
             @test name.(vertices(g_new)) == name.(vertices(g_org))
 
             indata = reshape(collect(Float32, 1:3*5*7), 3,5,7)
 
-            expout = g_org.(Flux.unstack(indata; dims=3))
-            resout = g_new.(Flux.unstack(indata; dims=3))
+            expout = g_org(indata)
+            resout = g_new(indata)
 
             @test size.(expout) == size.(resout)
             @test expout ≈ resout
 
-            ortout, = onnxruntime_infer(g_org, indata)
-            expout_s = hcat(expout...)
+            ortout, = onnxruntime_infer(g_org, recurrent_swap(indata))
+            expout_s = reshape(recurrent_swap(expout), nout(v3), :)
 
             @test size(expout_s) == size(ortout)
             @test expout_s ≈ ortout
@@ -1119,11 +1156,11 @@
         end
 
         @testset "$(cfun(l)) infer" for (l, expshape) in (
-            (Dense(2,3), (2,0)),
+            (Dense(2 => 3), (2,0)),
             (Conv((1, 1), 2=>3), (0,0,2,0)), 
-            (RNN(2,3), (2,0,0)), 
-            (LSTM(2,3), (2,0,0)), 
-            (SkipConnection(Dense(2,2), +), (2,0)),
+            (RNN(2 => 3), (2,0,0)), 
+            (LSTM(2 => 3), (2,0,0)), 
+            (SkipConnection(Dense(2 => 2), +), (2,0)),
             ), cfun in (Chain, l -> Chain(BatchNorm(nin(l)[]), l))
 
             c_org = cfun(l)
@@ -1208,10 +1245,10 @@
         end
 
         @testset "Allowed input shapes op: $(tc[1])" for tc in (
-            (Dense(2, 3), ((2, 3), (2, missing), missing, (missing, missing)), (2, 2)),
+            (Dense(2 => 3), ((2, 3), (2, missing), missing, (missing, missing)), (2, 2)),
             (Conv((1,), 2=>3), ((1,2,1), (1, missing, missing), missing, ntuple(i -> missing, 3)), (1,2,1)),
             (Conv((1,1), 2=>3), ((1,1,2,1), (1, missing, missing, missing), missing, ntuple(i -> missing, 4)), (1,1,2,1)),
-            (RNN(2,3), ((2,3,1), missing, ntuple(i -> missing, 3), ntuple(i -> missing ,4)), (2, 3))
+            (RNN(2 => 3), ((2,3,1), missing, ntuple(i -> missing, 3), ntuple(i -> missing ,4)), (2, 3))
         )     
             op, testsizes, validsize = tc
             inpt = ones(Float32, validsize)
@@ -1242,11 +1279,11 @@
         end
         
         @testset "Disallowed input shapes op: $(tc[1])" for tc in (
-            (Dense(2,3), ((2,), (3, 1), (missing, ), (1,2,3,4))),
-            (Conv((1,), 2=>3), ((2,), (missing, ), (1,1,1), (2,3,4,5,6), (2,3,4,5))),
-            (Conv((1,1), 2=>3), ((2,), (missing, ), (1,1,1,1), (2,3,4,5,6), (2,3,4))),
+            (Dense(2 => 3), ((2,), (3, 1), (missing, ), (1,2,3,4))),
+            (Conv((1,), 2 => 3), ((2,), (missing, ), (1,1,1), (2,3,4,5,6), (2,3,4,5))),
+            (Conv((1,1), 2 => 3), ((2,), (missing, ), (1,1,1,1), (2,3,4,5,6), (2,3,4))),
             (MaxPool((2,2)), ((2,), (missing, ), (1,1,1), (2,3,4,5,6))),
-            (RNN(2,3), ((2, ), (missing,), (2,1), (1,2,3), (2,3,4,5,6)))
+            (RNN(2 => 3), ((2, ), (missing,), (2,1), (1,2,3), (2,3,4,5,6)))
         )
             op, testsizes = tc
             @testset "Inputshape $s" for s in testsizes
