@@ -21,12 +21,19 @@ load(m::ONNX.ModelProto, insizes...; kwargs...) = load(m.graph, insizes...; kwar
 load(g::ONNX.GraphProto, insizes...; kwargs...) = CompGraph(g, insizes...; kwargs...)
 NaiveNASlib.CompGraph(g::ONNX.GraphProto, insizes...; kwargs...) = CompGraph(CompGraphBuilder(g, insizes...); kwargs...)
 function NaiveNASlib.CompGraph(gb::CompGraphBuilder; vfun = create_vertex_default, infer_shapes=true)
-    outputs::Vector{AbstractVertex} = vertex.(gb, node.(name.(gb.g.output), gb), vfun)
-    graph = CompGraph(gb.inputs, outputs)
-    if infer_shapes
-        try_infer_sizes!(graph, (get(gb.sizes, n, (missing,)) for n in name.(inputs(graph)))...)
-    end
-    return graph
+   # unique here is abit of a hack for LSTM testcase where an LSTM is the last layer
+   # Flux LSTM outputs a tuple which is translated to having two outputs in serialize
+   # However, the end result is that gb.g.output has one entry for each output and this means
+   # that we will put the same LSTM vertex twice as the output layer.
+   # This type of ambiguity (i.e do I want the output from vertex X twice, or does it actually
+   # output a tuple?) is why adding support for multi-output vertices seems quite painful
+   # at least with the current state of this package. 
+   outputs::Vector{AbstractVertex} = unique(vertex.(gb, node.(name.(gb.g.output), gb), vfun))
+   graph = CompGraph(gb.inputs, outputs)
+   if infer_shapes
+      try_infer_sizes!(graph, (get(gb.sizes, n, (missing,)) for n in name.(inputs(graph)))...)
+   end
+   return graph
 end
 
 """

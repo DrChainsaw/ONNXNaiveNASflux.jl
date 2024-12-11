@@ -92,6 +92,7 @@ check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::Val{
 
 function check_squeeze(nsqueeze::OnnxNode, gb::CompGraphBuilder, innode::OnnxNode, ::RecurrentLayer)
    @debug "Remove squeeze after $innode"
+   innode.attribute[SQUEEZED_RECURRENT_KEY] = true
    return retnode(innode, gb)
 end
 

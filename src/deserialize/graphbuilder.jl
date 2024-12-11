@@ -1,4 +1,6 @@
 
+const ACTIVE_OUTPUTS_ATTRIBUTE_KEY = :ONNXNaiveNASflux_ACTIVE_OUTPUTS
+
 """
    OnnxNode(proto::ONNX.NodeProto, params::Vector{ONNX.TensorProto}, attribs::Dict)
 
@@ -9,7 +11,11 @@ struct OnnxNode
    params::Vector{ONNX.TensorProto}
    attribute::Dict{Symbol, Any} # Must be Any or else we might overspecialize, preventing that stuff is added later
 end
-OnnxNode(proto, ps) = OnnxNode(proto, ps, Dict{Symbol, Any}(Dict(proto.attribute)))
+function OnnxNode(proto, ps) 
+   attribute = Dict{Symbol, Any}(Dict(proto.attribute))
+   attribute[ACTIVE_OUTPUTS_ATTRIBUTE_KEY] = findall(!isempty, output(proto))
+   OnnxNode(proto, ps, attribute)
+end
 
 """
    CompGraphBuilder(g::ONNX.Types.Graph, sizes::Dict{String, <:Tuple})

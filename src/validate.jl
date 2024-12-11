@@ -24,11 +24,19 @@ uniqueoutput(mp::ONNX.ModelProto, or=error) = uniqueoutput(mp.graph, or)
 function uniqueoutput(gp::ONNX.GraphProto, or=error)
     d = Dict()
     for n in gp.node
+        any_nonempty = false
         for oname in n.output
+            # Empty names to signal positional outputs that are not used (e.g. generate output nr 2 but not nr 1)  
+            # Therefore duplicates are allowed
+            isempty(oname) && continue
+            any_nonempty = true
             if haskey(d, oname)
                 or("Duplicate output name: $oname found in \n$(errinfo(d[oname])) \nand\n $(errinfo(n))")
             end
             d[oname] = n
+        end
+        if !any_nonempty
+            or("No selected output found for: \n$(errinfo(n))")
         end
     end
 end
@@ -78,7 +86,8 @@ function ioused(gp::ONNX.GraphProto)
     found = union(Set(name.(gp.input)), Set(name.(gp.initializer)))
     used = Set(name.(gp.output))
     for n in gp.node
-        foreach(oname -> push!(found, oname), n.output)
+        # Empty names to signal positional outputs that are not used (e.g. generate output nr 2 but not nr 1)  
+        foreach(oname -> push!(found, oname), filter(!isempty, n.output))
         foreach(iname -> push!(used, iname), n.input)
     end
 

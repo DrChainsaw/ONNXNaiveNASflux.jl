@@ -1,4 +1,4 @@
-import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes, array, params
+import ONNXNaiveNASflux: fluxlayers, sources, actfuns, invariantops, pseudotransparentops, optype, nodes, array, params, layerfuns
 using ONNXNaiveNASflux.NaiveNASflux
 
 # Logging to avoid CI timeouts
@@ -50,8 +50,6 @@ end
 recurrent_remap(x::AbstractArray{T, 3}) where T = permutedims(x, (1, 3, 2))
 recurrent_remap(x) = x
 
-recurrent_last_step(x::AbstractArray{T, 3}) where T = x[:, end:end, :] 
-
 
 @testset "Fluxlayer $(tc.name)" for tc in
     (
@@ -92,8 +90,8 @@ recurrent_last_step(x::AbstractArray{T, 3}) where T = x[:, end:end, :]
     (name="test_gemm_transposeB", ninputs=3, noutputs=1),
     (name="test_instancenorm_epsilon", ninputs=3, noutputs=1),
     (name="test_instancenorm_example", ninputs=3, noutputs=1),
-    (name="test_lstm_defaults", ninputs=3, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_last_step ∘ first),
-    (name="test_lstm_with_initial_bias", ninputs=4, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_last_step ∘ first),
+    (name="test_lstm_defaults", ninputs=3, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_remap),
+    (name="test_lstm_with_initial_bias", ninputs=4, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_remap),
     # (name="test_lstm_with_peepholes", ninputs=8, noutputs=1), Not supported!
     (name="test_maxpool_1d_default", ninputs=1, noutputs=1),
     #(name="test_maxpool_2d_ceil", ninputs=1, noutputs=1), Not supported!
@@ -103,7 +101,7 @@ recurrent_last_step(x::AbstractArray{T, 3}) where T = x[:, end:end, :]
     (name="test_maxpool_2d_strides", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
     (name="test_maxpool_3d_default", ninputs=1, noutputs=1),
-    (name="test_rnn_seq_length", ninputs=4, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_last_step),
+    (name="test_rnn_seq_length", ninputs=4, noutputs=1, inputmap=recurrent_remap, outputmap=recurrent_remap, resultmap=recurrent_remap),
     )
 
     model, gb, inputs, outputs = prepare_node_test(tc.name, tc.ninputs, tc.noutputs)
@@ -113,15 +111,12 @@ recurrent_last_step(x::AbstractArray{T, 3}) where T = x[:, end:end, :]
 
     resultmap = get(tc, :resultmap, identity)
 
-    if length(outputs) > 1
-        @show tc.name
-    end
-
     @testset "$(tc.name) op $(optype(node))" for node in nodes(gb)
         @test haskey(fluxlayers, optype(node))
         op = fluxlayers[optype(node)](node.attribute, params(node)...)
+        opwrapped = op |> get(layerfuns, optype(node), Returns(identity))(node.attribute, params(node)...)
 
-        res = resultmap(op(Float32.(inputs[1])))
+        res = resultmap(opwrapped(Float32.(inputs[1])))
         @test size(res) == size(outputs[1])
         @test res ≈ outputs[1]
     end

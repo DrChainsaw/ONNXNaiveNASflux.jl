@@ -25,7 +25,7 @@
         import ONNXNaiveNASflux: optype, actfuns, fluxlayers, invariantops
         using ONNXNaiveNASflux.NaiveNASflux
         import ONNXNaiveNASflux.NaiveNASflux: weights, bias
-        import ONNXNaiveNASflux: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape
+        import ONNXNaiveNASflux: AbstractProbe, nextname, newfrom, add!, genname, shape, nextshape, nodeprotos
         import Flux: unsqueeze
         struct NodeProbe{F, S} <: AbstractProbe
             name::String
@@ -40,6 +40,9 @@
         ONNXNaiveNASflux.newnamestrat(p::NodeProbe, f, pname = name(p)) = NodeProbe(pname, f, p.shape, p.protos)
         ONNXNaiveNASflux.name(p::NodeProbe) = p.name
         ONNXNaiveNASflux.shape(p::NodeProbe) = p.shape
+        
+        protos(p::ONNXNaiveNASflux.WrappedProbe) = protos(ONNXNaiveNASflux.unwrap(p))
+        protos(p::NodeProbe) = p.protos
 
         @testset "Paramfree op $(tc.op) attrs: $(pairs(tc.attr))" for tc in (
             (op=:Relu, attr = Dict(), fd=actfuns),
@@ -250,12 +253,15 @@
             import ONNXNaiveNASflux.NaiveNASflux: hiddenweights
 
             inprobe = NodeProbe("input", genname, shape(layertype(tc.layer), nin(tc.layer)))
+       
+            # Since Flux LSTM outputs both hidden and cell state and onnxruntime seems to just output the hidden
+            resultmap = get(tc, :resultmap, identity) 
 
-            outprobe = tc.layer(inprobe)
+            outprobe = resultmap(tc.layer(inprobe))
 
-            @test length(outprobe.protos) == 5
+            @test length(protos(outprobe)) == 5
 
-            wip,whp,bp,lp = Tuple(outprobe.protos)
+            wip,whp,bp,lp = Tuple(protos(outprobe))
 
             ln = serdeser(lp)
             wi = serdeser(wip)
@@ -273,9 +279,6 @@
             @test hiddenweights(res) ≈ hiddenweights(tc.layer)
             @test bias(res) ≈ bias(res)
 
-            # Since Flux LSTM outputs both hidden and cell state and onnxruntime seems to just output the hidden
-            resultmap = get(tc, :resultmap, identity) 
-
             resout = resultmap(res(tc.indata))
             expout = resultmap(tc.layer(tc.indata))
 
@@ -285,7 +288,7 @@
             # Permute dims here since onnx wants [timesteps, batchsize, features] while flux wants [features, timesteps, batchsize]
             # Note that onnxruntime_infer reveres the dimensions for all inputs, so when we feed it [features, batchsize, timesteps]
             # it will do the reversal of the dimensions to [timesteps, batchsize, features]
-            ortout, = onnxruntime_infer(tc.layer, permutedims(tc.indata, (1, 3, 2)))
+            ortout, = onnxruntime_infer(resultmap ∘ tc.layer, permutedims(tc.indata, (1, 3, 2)))
             ortout = permutedims(ortout, (1, 3, 2))
 
             @test size(ortout) == size(expout)
@@ -724,9 +727,15 @@
         end
 
         @testset "RNN to LSTM" begin
+            struct SelectHiddenOut{L} <: AbstractMutableComp
+                wrapped::L
+            end
+            NaiveNASflux.wrapped(l::SelectHiddenOut) = l.wrapped
+            (l::SelectHiddenOut)(x...) = first(l.wrapped(x...))
+
             v0 = rnninputvertex("input", 3)
             v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0)
-            v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1)
+            v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1; layerfun=SelectHiddenOut)
 
             test_named_graph(CompGraph(v0, v2); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
         end
@@ -739,7 +748,6 @@
             end
             NaiveNASflux.wrapped(l::SelectHidden) = l.wrapped
             (l::SelectHidden)((h, c)::Tuple) = l.wrapped(h)
-            (l::SelectHidden)(x) = l.wrapped(x)
 
             v0 = rnninputvertex("input", 3)
             v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0)
@@ -747,33 +755,7 @@
             v3 = dense("dense", v2, 2, elu; layerfun=SelectHidden)
 
             g_org = CompGraph(v0, v3)
-
-            # We need to manually add back the SelectHidden when we recreate the graph
-            
-            # In theory we could try to implement general support for multi-output OPs in ONNX
-            # and just assume that such OPs in Julia output tuples (meaning that the next OP 
-            # accepts tuples).
-
-            # It is not clear to me though how to handle the non-trivial cases, for example
-            # if a node A has wants e.g output 3 from B, output 5 from C, output 1 from B
-            # output 3 from C and 4 from C in that order. What shall this poor package then
-            # assume about which of those shall be packed in tuples and which shall be given
-            # as individual arguments?
-
-            # This won't help us here though since Flux.LSTM outputs are not the same as
-            # ONNX LSTM outputs (except for the first output, i.e. the hidden state).
-            
-            # This can also maybe be worked around by adding some OPs and then detect
-            # that they are redundant when importing, but I'm not gonna bother with
-            # that unless someone really needs it...
-            vfun = function(node, inputvertices)
-                if name(node) == name(v3)
-                    ONNXNaiveNASflux.create_vertex_default(node, inputvertices; layerfun=SelectHidden)
-                else
-                    ONNXNaiveNASflux.create_vertex_default(node, inputvertices)
-                end
-            end
-            g_new = CompGraph(serdeser(graphproto(g_org)); vfun)
+            g_new = CompGraph(serdeser(graphproto(g_org)))
 
             @test name.(vertices(g_new)) == name.(vertices(g_org))
 
@@ -790,6 +772,69 @@
 
             @test size(expout_s) == size(ortout)
             @test expout_s ≈ ortout
+        end
+
+        @testset "RNN select multiple outputs" begin
+            import ONNXNaiveNASflux: OutputSelection, _rnn_output_selection, AddSingletonDim
+
+            # [seq_length, num_directions, batch_size, hidden_size] gets reversed to
+            # [hidden_size, batch_size, num_directions, seq_length]
+            # Need to swap batch_size and seq_length to match Flux output with added dim 3
+            recurrent_swap_onnx(x::AbstractArray{T, 4}) where T = permutedims(x, (1, 4, 3, 2))
+            recurrent_swap_onnx(x) = x
+
+            @testset "Select first and second" begin
+                v0 = rnninputvertex("input", 3)
+                v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0; layerfun=l -> OutputSelection(ntuple(_rnn_output_selection, 2), l))
+
+                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
+            end
+
+            @testset "Select first and second with direction dim" begin
+                v0 = rnninputvertex("input", 3)
+                v1 = fluxvertex("rnn", RNN(nout(v0) => 3), v0; layerfun=l -> AddSingletonDim(3, OutputSelection(ntuple(_rnn_output_selection, 2), l)))
+                
+                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap_onnx, ortinputmap=recurrent_swap)
+            end
+
+        end
+
+        @testset "LSTM select multiple outputs" begin
+            import ONNXNaiveNASflux: OutputSelection, _lstm_output_selection, AddSingletonDim
+
+            # [seq_length, num_directions, batch_size, hidden_size] gets reversed to
+            # [hidden_size, batch_size, num_directions, seq_length]
+            # Need to swap batch_size and seq_length to match Flux output with added dim 3
+            recurrent_swap_onnx(x::AbstractArray{T, 4}) where T = permutedims(x, (1, 4, 3, 2))
+            recurrent_swap_onnx(x) = x
+
+            @testset "Select first and second" begin
+                v0 = rnninputvertex("input", 3)
+                v1 = fluxvertex("lstm", LSTM(nout(v0) => 4), v0; layerfun=l -> OutputSelection(ntuple(_lstm_output_selection, 2), l))
+
+                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
+            end
+
+            @testset "Select first, second and third" begin
+                v0 = rnninputvertex("input", 3)
+                v1 = fluxvertex("lstm", LSTM(nout(v0) => 4), v0; layerfun=l -> OutputSelection(ntuple(_lstm_output_selection, 3), l))
+
+                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
+            end
+
+            @testset "Select first and second with direction dim" begin
+                v0 = rnninputvertex("input", 3)
+                v1 = fluxvertex("lstm", LSTM(nout(v0) => 3), v0; layerfun=l -> AddSingletonDim(3, OutputSelection(ntuple(_lstm_output_selection, 2), l)))
+                
+                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap_onnx, ortinputmap=recurrent_swap)
+            end
+
+            @testset "Select first, second and third with direction dim" begin
+                v0 = rnninputvertex("input", 3)
+                v1 = fluxvertex("lstm", LSTM(nout(v0) => 4), v0; layerfun=l -> AddSingletonDim(3, OutputSelection(ntuple(_lstm_output_selection, 3), l)))
+
+                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap_onnx, ortinputmap=recurrent_swap)
+            end
         end
 
         @testset "Graph two inputs two outputs" begin
@@ -1122,7 +1167,7 @@
     end
 
     @testset "Models" begin
-        import ONNXNaiveNASflux: modelproto, sizes, clean_size
+        import ONNXNaiveNASflux: modelproto, sizes, clean_size, OutputSelection
 
         @testset "Generic function infer" begin
             _f(x, y) = x .+ y
@@ -1159,7 +1204,7 @@
             (Dense(2 => 3), (2,0)),
             (Conv((1, 1), 2=>3), (0,0,2,0)), 
             (RNN(2 => 3), (2,0,0)), 
-            (LSTM(2 => 3), (2,0,0)), 
+            (OutputSelection(first, LSTM(2 => 3)), (2,0,0)), 
             (SkipConnection(Dense(2 => 2), +), (2,0)),
             ), cfun in (Chain, l -> Chain(BatchNorm(nin(l)[]), l))
 

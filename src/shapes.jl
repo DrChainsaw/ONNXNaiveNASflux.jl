@@ -111,7 +111,6 @@ function outshape(::Flux2D, l, s::Tuple)
 end
 outshape(::FluxRecurrent, l, s::Tuple) = outshape(l.cell, l, s)
 function outshape(::FluxRecurrentCell, l, s::Tuple)
-    # l might be a cell and nin/nout in NaiveNASflux is only defined for Flux.Recur{cell}.
     assertshape(s, (3, 4), l)
     assertsize(s[1], nin(l)[], l)
     # ONNX wants num directions as an extra dimension to output
