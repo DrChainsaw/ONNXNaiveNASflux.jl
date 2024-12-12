@@ -1,4 +1,6 @@
 
+const ACTIVE_OUTPUTS_ATTRIBUTE_KEY = :ONNXNaiveNASflux_ACTIVE_OUTPUTS
+
 """
    OnnxNode(proto::ONNX.NodeProto, params::Vector{ONNX.TensorProto}, attribs::Dict)
 
@@ -9,7 +11,11 @@ struct OnnxNode
    params::Vector{ONNX.TensorProto}
    attribute::Dict{Symbol, Any} # Must be Any or else we might overspecialize, preventing that stuff is added later
 end
-OnnxNode(proto, ps) = OnnxNode(proto, ps, Dict{Symbol, Any}(Dict(proto.attribute)))
+function OnnxNode(proto, ps) 
+   attribute = Dict{Symbol, Any}(Dict(proto.attribute))
+   attribute[ACTIVE_OUTPUTS_ATTRIBUTE_KEY] = findall(!isempty, output(proto))
+   OnnxNode(proto, ps, attribute)
+end
 
 """
    CompGraphBuilder(g::ONNX.Types.Graph, sizes::Dict{String, <:Tuple})
@@ -60,6 +66,8 @@ function output_to_node(nodes, initdict)
       ps = params(nodeproto, initdict)
       node = OnnxNode(nodeproto, ps)
       for outname in output(node)
+         # TODO: Custom error type for this
+         @assert outname ∉ keys(allnodes) "Duplicate output name found: $(outname)!" 
          allnodes[outname] = node
       end
    end
@@ -186,6 +194,6 @@ end
 optype(n::ONNX.NodeProto) = Symbol(n.op_type)
 optype(n::OnnxNode) = optype(n.proto)
 
-Flux.params(n::ONNX.NodeProto, initdict) = params(Val(optype(n)), n, initdict)
-Flux.params(::Val, n::ONNX.NodeProto, initdict) = map(pname -> initdict[pname], setdiff(input(n), innames(n))) # Inputs which are not other vertices
-Flux.params(n::OnnxNode) = n.params .|> array 
+params(n::ONNX.NodeProto, initdict) = params(Val(optype(n)), n, initdict)
+params(::Val, n::ONNX.NodeProto, initdict) = map(pname -> initdict[pname], setdiff(input(n), innames(n))) # Inputs which are not other vertices
+params(n::OnnxNode) = n.params .|> array 

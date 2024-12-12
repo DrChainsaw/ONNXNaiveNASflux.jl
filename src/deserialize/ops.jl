@@ -9,6 +9,8 @@ const pseudotransparentops = Dict{Symbol, Any}()
 const verts = Dict{Symbol, Any}()
 const fluxlayertypes = Dict{Symbol, Any}()
 
+layerfuns = Dict{Symbol, Any}()
+
 # Rundown of the basic idea here:
 
 # Aspect 1
@@ -38,13 +40,60 @@ const fluxlayertypes = Dict{Symbol, Any}()
 
 # Functions which have dedicated vertex construction methods, such as Concat and Add end up in verts.
 
+
+"""
+    OutputSelection(selection, wrapped)
+
+Selects outputs from `wrapped` using `selection`.
+
+Typically used when `wrapped` outputs a `Tuple` from which other nodes in the computation graph
+only wants a subset.
+
+Can also be used to transform Flux output to ONNX output. One example is recurrent layers where
+Flux outputs all time steps of the hidden state while some ONNX outputs are only the last step.
+
+Note that the more useful and generic InputSelection (which would allow a node to pick a subset)
+of some other nodes output as its input is not yet implemented. OutputSelection only works when
+1) all nodes which take input from `wrapped` want the exact same outputs and 2) on output nodes
+(which is the reason why I bothered to implement it to begin with).
+"""
+struct OutputSelection{FS, L} <: NaiveNASflux.AbstractMutableComp
+    selection::FS
+    wrapped::L
+end
+NaiveNASflux.wrapped(o::OutputSelection) = o.wrapped
+(o::OutputSelection)(x...) = _apply_selection(o.selection, wrapped(o)(x...))
+
+_apply_selection(fs::Tuple, x) = map(f -> f(x), fs)
+_apply_selection(f, x) = f(x)
+
+# Use for Recurrent layers since ONNX specifies on extra dimension for the number of directions
+# which Flux does not have
+struct AddSingletonDim{L} <: NaiveNASflux.AbstractMutableComp
+    dim::Int
+    wrapped::L
+end
+NaiveNASflux.wrapped(a::AddSingletonDim) = a.wrapped
+function (a::AddSingletonDim)(x) 
+    y = wrapped(a)(x)
+    _apply_add_singleton_dim(y, a.dim) 
+end
+
+_apply_add_singleton_dim(x, dim) = reshape(x, size(x)[1:dim-1]..., 1, size(x)[dim:end]...)
+_apply_add_singleton_dim(xt::Tuple, dim) = map(x -> _apply_add_singleton_dim(x, dim), xt)
+
 struct OpNotSupportedError <: Exception
     msg::String
 end
 OpNotSupportedError(op_type::Symbol) = OpNotSupportedError(string("Operation type ", op_type, " not supported!"))
 Base.showerror(io::IO, e::OpNotSupportedError) = print(io, "OpNotSupportedError: ", e.msg)
 
-sources[:Constant] = params -> constant(Val.(keys(params))..., values(params)...)
+sources[:Constant] = function(params) 
+    params = if ACTIVE_OUTPUTS_ATTRIBUTE_KEY in keys(params)
+        delete!(copy(params), ACTIVE_OUTPUTS_ATTRIBUTE_KEY)
+    end
+    constant(Val.(keys(params))..., values(params)...)
+end
 constant(::Val{:value}, val::ONNX.TensorProto) = val |> array
 constant(::Val{:value}, val) = val
 
@@ -149,21 +198,55 @@ actlayers[:InstanceNormalization] = function(params, γ, β)
 end
 fluxlayertypes[:InstanceNormalization] = (pars...) -> FluxInstanceNorm()
 
-fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = default_init_h(Wb_Rb, 2))
-    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
+const SQUEEZED_RECURRENT_KEY = :ONNXNaiveNASflux_SQUEEZED_RECURRENT_KEY
 
-    Wi,Wh,b,h = recurrent_arrays(FluxRnn(), Wi_WBi, Wh_WBh, Wb_Rb, h3d)
+fluxrecurrentlayers[:RNN] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[], h3d = nothing)
+    @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
+    if !isnothing(h3d)
+        # We could probably create some wrapper struct for this if anyone ever needs it...
+        @warn "Got initial hidden state for RNN. This can't be stored in Flux > 0.15 and will be ignored."
+    end
+    Wi,Wh,b = recurrent_arrays(FluxRnnCell(), Wi_WBi, Wh_WBh, Wb_Rb)
     act = rnnactfuns[Symbol(get(params, :activations, ["Tanh"])[])](1, params)
-    cell = Flux.RNNCell(act, Wi, Wh, b, fill!(similar(h), 0))
-    return Flux.Recur(cell, h)
+    cell = Flux.RNNCell(act, Wi, Wh, b)
+    return Flux.RNN(cell)
 end
 fluxlayertypes[:RNN] = (pars...) -> FluxRnn()
 
+_onnx_rnn_output1(h) = h
+# Select last timestep
+_onnx_rnn_output2(h::AbstractArray) = selectdim(h, 2, lastindex(h, 2))
 
-fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = default_init_h(Wb_Rb, 8), c3d=default_init_h(Wb_Rb,8), peep=nothing)
+_rnn_output_selection(i) = i === 1 ? _onnx_rnn_output1 :
+                           i === 2 ? _onnx_rnn_output2 :
+                           throw(ArgumentError("Unsupported RNN output: $i"))
+
+layerfuns[:RNN] = function(params, args...)
+    active_outputs = params[ACTIVE_OUTPUTS_ATTRIBUTE_KEY]
+    selection = if length(active_outputs) == 1
+        _rnn_output_selection(only(active_outputs))
+    else
+        ntuple(i -> _rnn_output_selection(active_outputs[i]), length(active_outputs))
+    end
+    paddims = haskey(params, SQUEEZED_RECURRENT_KEY) ? identity : l -> AddSingletonDim(3, l)
+    layer -> paddims(OutputSelection(selection, layer))
+end
+
+
+fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_Rb(Wh_WBh), seqlen=[1], h3d = nothing, c3d = nothing, peep=nothing)
     @assert size(Wi_WBi, 3) == 1 "Num directions must be 1! Bidirectional (num directions = 2) not supported!" # TODO: Add...
     @assert isnothing(peep) "Peepholes not supported!" # Or?
-    Wi,Wh,b,h,c = recurrent_arrays(FluxLstm(), Wi_WBi, Wh_WBh, Wb_Rb, h3d, c3d)
+    if !isnothing(h3d)
+        # We could probably create some wrapper struct for this if anyone ever needs it...
+        @warn "Got initial hidden state for LSTM. This can't be stored in Flux > 0.15 and will be ignored."
+    end
+    
+    if !isnothing(c3d)
+        # We could probably create some wrapper struct for this if anyone ever needs it...
+        @warn "Got initial cell state for LSTM. This can't be stored in Flux > 0.15 and will be ignored."
+    end
+
+    Wi,Wh,b = recurrent_arrays(FluxLstmCell(), Wi_WBi, Wh_WBh, Wb_Rb)
     # Flux only supports default activation functions
     # We can only check that given values doesn't deviate
     supported = [:Sigmoid, :Tanh, :Tanh]
@@ -172,12 +255,39 @@ fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_R
         e == a
     end "Got unsupported activation function: $acts"
 
-    # b, h and c must all be of the same type when creating a cell, but
-    # it is actually Recur which has the state
-    cell = Flux.LSTMCell(Wi, Wh, b, (fill!(similar(h), 0), fill!(similar(c), 0)))
-    return Flux.Recur(cell, (h, c))
+    # Should not be a problem when/if Flux adds this back as an optional output
+    @assert 3 ∉ params[ACTIVE_OUTPUTS_ATTRIBUTE_KEY] "LSTM output 3 (the cell state) not implemnented!" 
+
+    cell = Flux.LSTMCell(Wi, Wh, b)
+    return Flux.LSTM(cell)
 end
 fluxlayertypes[:LSTM] = (pars...) -> FluxLstm()
+
+_onnx_lstm_output1(h::AbstractArray) = h
+_onnx_lstm_output2(h::AbstractArray) = selectdim(h, 2, lastindex(h, 2))
+_onnx_lstm_output3(::AbstractArray) = throw(ArgumentError("LSTM output nr 3 (cell state) requires Flux.LSTM to output state. Please check you layer configuration!")) 
+
+_onnx_lstm_output1((h, c)::NTuple{2, AbstractArray}) = h
+_onnx_lstm_output2((h, c)::NTuple{2, AbstractArray}) = selectdim(h, 2, lastindex(h, 2))
+_onnx_lstm_output3((h, c)::NTuple{2, AbstractArray}) = selectdim(c, 2, lastindex(c, 2))
+
+_lstm_output_selection(i) = i === 1 ? _onnx_lstm_output1 :
+                            i === 2 ? _onnx_lstm_output2 :
+                            i === 3 ? _onnx_lstm_output3 :
+                            throw(ArgumentError("Unsupported LSTM output: $i"))
+
+layerfuns[:LSTM] = function(params, args...)
+    active_outputs = params[ACTIVE_OUTPUTS_ATTRIBUTE_KEY]
+    selection = if length(active_outputs) == 1
+        # Can we be sure receiver does not want a single-element tuple here? No we can't :( :( :(
+        _lstm_output_selection(only(active_outputs))
+    else
+        ntuple(i -> _lstm_output_selection(active_outputs[i]), length(active_outputs))
+    end
+    paddims = haskey(params, SQUEEZED_RECURRENT_KEY) ? identity : l -> AddSingletonDim(3, l)
+    layer -> paddims(OutputSelection(selection, layer))
+end
+
 
 function recurrent_arrays(lt, Wi_WBi, Wh_WBh, Wb_Rb, h3ds...)
     # ONNX weights are on the form [num_directions, hidden_size, input_size] (where num_directions is 2 for bidirectional else 1)
@@ -416,7 +526,15 @@ function refresh()
     end
 
     for (s, f) in fluxlayers
-        verts[s] = (name, inputs, args...;kwargs...) -> fluxvertex(name, f(args...), inputs...; kwargs...)
+        verts[s] = function(name, inputs, args...; kwargs...) 
+            # This is typically to select outputs, e.g. from recurrent layers
+            kwargsnew = if s in keys(layerfuns)
+                    mergewith(∘, Dict(:layerfun => layerfuns[s](args...)), Dict(kwargs))
+            else
+                kwargs
+            end
+            fluxvertex(name, f(args...), inputs...; kwargsnew...)
+        end
     end
 
     for (s, f) in invariantops

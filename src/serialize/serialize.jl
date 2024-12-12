@@ -97,151 +97,6 @@ modelproto(;kwargs...) = ONNX.ModelProto(;
     kwargs...)
 
 """
-    AbstractProbe
-
-Abstract base class for probes used for serialization.
-
-Idea is that probe will "record" all seen operations based on how methods for those operations on the probe is defined.
-"""
-abstract type AbstractProbe end
-
-nextshape(p::AbstractProbe, f::Function) = f(shape(p))
-Base.ndims(p::AbstractProbe) = length(shape(p))
-
-"""
-    WrappedProbe
-
-Abstract class which promises that it wraps another `AbstractProbe` to which it delegates most of its tasks. 
-"""
-abstract type WrappedProbe <: AbstractProbe end
-
-unwrap(p::WrappedProbe) = p.wrapped
-
-Base.Broadcast.broadcastable(p::WrappedProbe) = Ref(p)
-
-NaiveNASlib.name(p::WrappedProbe) = NaiveNASlib.name(unwrap(p))
-
-nextname(p::WrappedProbe) = nextname(unwrap(p))
-add!(p::WrappedProbe, args...) = add!(unwrap(p), args...)
-shape(p::WrappedProbe) = shape(unwrap(p))
-add_output!(p::WrappedProbe) = add_output!(unwrap(p))
-newnamestrat(p::WrappedProbe, args...) = rewrap(p, newnamestrat(unwrap(p), args...))
-newfrom(p::WrappedProbe, args...) = rewrap(p, newfrom(unwrap(p), args...))
-
-# Called by several activation functions
-Base.oftype(::AbstractProbe, x) = x
-
-"""
-    ProtoProbe <: AbstractProbe
-    ProtoProbe(name, shape, nextname, graph)
-
-Probe which builds an [`ONNX.GraphProto`](@ref) from seen operations.
-"""
-struct ProtoProbe{N,F,P,S} <: AbstractProbe
-    name::N
-    shape::S
-    nextname::F
-    graph::P
-end
-Base.Broadcast.broadcastable(p::ProtoProbe) = Ref(p)
-NaiveNASlib.name(p::ProtoProbe) = p.name
-nextname(p::ProtoProbe) = p.nextname
-add!(p::ProtoProbe, n) = add!(p.graph, n)
-shape(p::ProtoProbe) = p.shape
-add_output!(p::ProtoProbe) = push!(p.graph.output, ONNX.ValueInfoProto(name(p), shape(p)))
-
-inputprotoprobe!(args...) = _inputprotoprobe!(args...)
-function _inputprotoprobe!(gp, name, shape, namestrat)
-    push!(gp.input, ONNX.ValueInfoProto(name, shape))
-    ProtoProbe(name, shape, namestrat, gp)
-end
-
-"""
-    newnamestrat(p::ProtoProbe, f, pname=p.name)
-
-Return a new `ProtoProbe` from `p` with `nextname = f` and name `pname`.
-"""
-newnamestrat(p::ProtoProbe, f, pname=p.name) = ProtoProbe(pname, p.shape, f, p.graph)
-
-"""
-    newfrom(p::ProtoProbe, outname::AbstractString, fshape=identity)
-
-Return a new `ProtoProbe` with name `outname`. Argument `fshape` is used to determine a new shape (typically a function).
-"""
-newfrom(p::ProtoProbe, outname::AbstractString, fshape) = ProtoProbe(outname, nextshape(p, fshape), p.nextname, p.graph)
-
-add!(gp::ONNX.GraphProto, np::ONNX.NodeProto) = push!(gp.node, np)
-
-add!(gp::ONNX.GraphProto, tp::ONNX.TensorProto) = push!(gp.initializer, tp)
-
-## Don't forget to check if new methods need to be added for any WrappedProbe implementations if you add something here!
-
-# Stuff whose only purpose is to override the name in case this is the naming strategy
-# See namingutil for a little story about the design since it is a bit messy :(
-
-"""
-    NameInterceptProbe <: WrappedProbe
-
-An AbstractProbe which is only used to intercept methods call above the primitive level to catch names (e.g. a `Chain` with a `NamedTuple` as layers).
-"""
-struct NameInterceptProbe{P<:AbstractProbe} <: WrappedProbe
-    wrapped::P
-end
-rewrap(::NameInterceptProbe, p) = NameInterceptProbe(p)
-
-inputprotoprobe!(gp, name, shape, namestrat::NamedNodeContext) = NameInterceptProbe(_inputprotoprobe!(gp, name, shape, namestrat))
-
-# This little dance is just to avoid ambiguities of (n::NamedNode)(pps...) since NamedNode is abstract
-# TODO: Generate with macro so we can add types to the union without worry? 
-(v::MutationVertex)(pps::AbstractProbe...) = _apply_probe_call(v, pps...)
-(n::NamedFunction)(pps::AbstractProbe...) = _apply_probe_call(n, pps...)
-
-_apply_probe_call(n::NamedNode, pps::AbstractProbe...) = __apply_probe_call(n, nextname(first(pps)), pps...)
-
-# We are not in the business of catching names here, so just forward the call
-__apply_probe_call(n::NamedNode, ::Any, pps::AbstractProbe...) = base(n)(pps...)
-# We just want to rewrap probes in NameInterceptProbes for the sole reason that we might encounter other 
-# objects that we want to intercept names from (e.g. a Chain inside a Parallel)
-__apply_probe_call(n::NamedNode, ::NamedNodeContext, pps::AbstractProbe...) = _apply_probe_call(n, map(NameInterceptProbe, pps)...)
-
-function _apply_probe_call(n::NamedNode, pps::NameInterceptProbe...)
-    ppsname = map(pps) do pp
-        newnamestrat(pp, nextname(pp)(n))
-    end
-    ppout = base(n)(ppsname...)
-    return newnamestrat(ppout, nextname(pps[1]))
-end
-
-# Here we wrap all callable children in a NamedFunction so that we can access the name when the child is called
-(c::Chain)(pp::NameInterceptProbe) = _instrument_named_functor(c; addbasename=false)(unwrap(pp))
-(p::Parallel)(pp::NameInterceptProbe) = _instrument_named_functor(p; addbasename=false)(unwrap(pp))
-(p::SkipConnection)(pp::NameInterceptProbe) = _instrument_named_functor(p; addbasename=false)(unwrap(pp))
-
-# The exclude is to ensure that we only see the fields of w, not the fields of its children
-_instrument_named_functor(w; addbasename=true) = Functors.fmap_with_path(w; exclude = (k,c) -> c != w) do keypath, child
-    _instrument_named_child(child, string(only(keypath)); addbasename)
-end
-
-_instrument_named_child(child, name; kwargs...) = !isempty(methods(child)) ? NamedFunction(child, name) : child
-_instrument_named_child(child::Tuple, name; addbasename) = ntuple(length(child)) do i
-    _instrument_named_child(child[i], string(addbasename ? name : "", '[', i, ']'))
-end
-_instrument_named_child(child::AbstractArray, name; addbasename) = map(enumerate(child)) do (i, elem)
-    _instrument_named_child(elem, string(addbasename ? name : "", '[', i, ']'))
-end
-_instrument_named_child(child::NamedTuple{K}, name; addbasename) where K = ntuple(length(child)) do i
-    _instrument_named_child(child[i], string(addbasename ? string(name, '.') : "", K[i]))
-end |> NamedTuple{K}
-
-# End of stuff whose only purpose is to override the name in case this is the naming strategy 
-
-
-"""
-    Used to get activation functions as [`ONNX.AttributeProto`](@ref)s.
-"""
-struct ActivationAttributeProbe end
-
-"""
     graphproto(;kwargs...)
 
 Return an [`ONNX.GraphProto`](@ref) with all fields initialized to empty arrays.
@@ -292,6 +147,7 @@ function _graphproto(f, indata::Pair{String, <:Any}...; namestrat = name_running
     outpps = f(pps...)
 
     add_outputs!(gp, namestrat, outpps)
+    set_unused_outputs_to_empty!(gp)
 
     return gp
 end
@@ -306,6 +162,24 @@ function add_outputs!(gp, namestrat, pps::Tuple)
 
     output_pps = constant.(pps, tempprobe, namestrat)
     add_output!.(output_pps)
+end
+
+function set_unused_outputs_to_empty!(gp::ONNX.GraphProto)
+    all_used_inputs = mapreduce(n -> n.input, vcat, gp.node; init=name.(gp.output)) |> Set
+
+    for node in gp.node
+        if length(node.output) > 1
+            # Special case for nodes with more than one output as Flux layers always output everything
+            # and "not used" just means that no other op used it as input 
+            for (i, outname) in zip(eachindex(node.output), node.output)
+                if outname ∉ all_used_inputs
+                    # Empty names to signal positional outputs that are not used 
+                    #(e.g. generate output nr 2 but not nr 1)  
+                    node.output[i] = ""
+                end
+            end
+        end
+    end
 end
 
 
@@ -341,7 +215,8 @@ end
 function(l::Flux.Dense)(pp::AbstractProbe)
     ppl = pp
     if !ismissing(shape(pp)) && ndims(pp) == 3
-        # Special case: Recurrent -> Dense. This is nothing special in flux as recurrent layers do 2D -> 2D
+        # Special case: Recurrent -> Dense. This is nothing special in flux as the dense layers automatically broadcast
+        # through all dimensions except the first.
         # For it to be valid ONNX however we need to add a reshape so that time dimension becomes batch dimension
         outsize = shape(pp)[1]
         lname = recursename(l, nextname(pp))
@@ -407,13 +282,11 @@ end
 actfun(::FluxInstanceNorm, l) = l.λ
 
 
-# Dropdims because ONNX expects recurrent layers to output tensors of shape [seq_length, num_directions, batch_size, hidden_size] where num_directions is 2 in case of bidirectional and 1 otherwise
-# Flux.Recur is not bidirectional so we'll just assume the user wants to also drop num_directions so that recurrent layers can be stacked without hassle.
-# Override Flux.Recur with some other method to circumvent this behaviour if not wanted
-(m::Flux.Recur)(pps::AbstractProbe...) = dropdims(m.cell(m.state, pps...), dims=3)
+(m::Flux.RNN)(pps::AbstractProbe...) = m.cell(pps...)
+(m::Flux.LSTM)(pps::AbstractProbe...) = m.cell(pps...)
 
-(l::Flux.RNNCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
-(l::Flux.LSTMCell)(h, pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
+(l::Flux.RNNCell)(pp::AbstractProbe) = recurrent_node(l, pp, "RNN")
+(l::Flux.LSTMCell)(pp::AbstractProbe) = recurrent_node(l, pp, "LSTM")
 
 function recurrent_node(l, pp, optype)
     lname = recursename(l, nextname(pp))
@@ -433,27 +306,118 @@ function recurrent_node(l, pp, optype)
     Wh = permutedims(flipweights(layertype(l), l.Wh, hsize))
     add!(pp, ONNX.TensorProto(reshape(Wh, size(Wh)..., 1), rname))
 
-    if !isa(l.b, Number)
+    if !isa(bias(l), Number)
         # ONNX has a separate bias for the recurrent part and wants the concatenation of input and recurrent biases.
         # We'll just hard code it to zeros. Doesn't matter which part is which as they are just added together in the ONNX expression for RNNs.
-        b = flipweights(layertype(l), reshape(l.b, :, 1), hsize)
+        b = flipweights(layertype(l), reshape(bias(l), :, 1), hsize)
         add!(pp, ONNX.TensorProto(vcat(b, zeros(eltype(b), size(b))), bname))
         push!(inputnames, bname)
     end
 
     add!(pp, ONNX.NodeProto(
         input=inputnames,
+        # This happens to work since all currently supported Flux recurrent layers
+        # output (close to) the same thing as the first output in their ONNX counterpart
+        # We might push more outputs to this if we encounter some sort of "select and
+        # reformat the data into this other output" operation down the road. 
         output=[lname],
         name=lname,
         attribute = push!(activation_attrib(l), hsattrib),
         op_type=optype))
 
-    return newfrom(pp, lname, s -> outshape(l, s))
+    # Big sigh here:
+    # ONNX recurrent layers have different number of outputs compared to Flux (e.g. 3 outputs for LSTM vs 2 in Flux)
+    # At this point we need to return the exact number of outputs as Flux outputs or else the function will probably fail
+    # (e.g the next operation expect a tuple of exactly 2 elements from the LSTM).
+
+    # Therefore, at the time of writing, the fact that we return multiple outputs here is a false friend as it has
+    # really nothing to do with being compliant with the ONNX spec. It is strictly just to ensure that the function
+    # we are tracing through is still valid.
+
+    # As a matter of fact, only the first output from Flux happens to be somewhat close to what ONNX defines
+    # (more on that below).
+
+    # For LSTM, the second output shall be the hidden state (same as first output) for only the last time step
+    # while Flux outputs the cell state for all time steps there while the third output in ONNX is the cell
+    # state but only for the last time step. 
+    
+    # The saga continues:
+    # To prevent that this causes confusion when tryng to import the model in some other framework, we 
+    # wrap the second output of Flux LSTM in a toxic AbstractProbe which will throw an exception stating
+    # that this output is not ONNX compatible if anything touches it.  
+
+    # But wait! There is more!, 
+    # ONNX states that recurrent layers have 4D output while Flux has 3D output (the extra dimension being)
+    # the two directions if bidirectional.
+    # If we are just saving a native Flux model we handle this by adding a Squeeze op directly after this
+    # layer which will remove the extra dimension (which is a singleton since Flux does not do bidirectional).
+
+    # Now for the grand finale:
+    # If we are saving a model which was imported from ONNX using ONNXNaiveNASflux there will be a future
+    # op which changes the Flux output to ONNX output, both w.r.t the extra dimension for the directions
+    # (we don't support bidirectional so it is always just a matter of adding a singleton dimension),
+    # adding one extra output (i.e making the LSTM 2 element tuple into 3 element tuple) and shaving
+    # off the extra time steps. 
+
+    # Since we can't tell from there whether this will happen we need to prepare a hypothetical output
+    # which can then be selected from the coming OP. This hypothetical output will clean itself up
+    # if it does not encounter the Flux->ONNX specific OPs of this package. Note that it will have to
+    # propagate through the Squeeze OP and then maybe go back and remove the Squeze as well as 
+    # remove the toxic AbstractProbe
+    return _returnvalue(l, pp, lname)
 end
 
+_outputnames(l, basename) = _outputnames(layertype(l), l, basename)
+_outputnames(::Any, l, basename) = [basename]
+_outputnames(::FluxLstmCell, l, basename) = [basename, string(basename, "_cell")]
+
+_returnvalue(l, pp, lname) = _returnvalue(layertype(l), l, pp, lname)
+# Dropdims because ONNX expects recurrent layers to output tensors of shape [seq_length, num_directions, batch_size, hidden_size] where num_directions is 2 in case of bidirectional and 1 otherwise
+# Flux recurrent layers are not bidirectional so we'll just assume the user wants to also drop num_directions so that recurrent layers can be stacked without hassle.
+function _returnvalue(::FluxRecurrentCell, l, pp, lname) 
+    pnew = dropdims(newfrom(pp, lname, s -> outshape(l, s)); dims=3)
+    OutputSelectProbe(pnew, lname, falses(2), 0)
+end
+# TODO Warning!! Flux does not comply to ONNX for LSTM. The first output is the same, but the second output in 
+# ONNX is the last time step of the hidden and the third output in ONNX is the last time step of the cell state
+function _returnvalue(::FluxLstmCell, l, pp, lname) 
+     out1 = dropdims(newfrom(pp, lname, s -> outshape(l, s)); dims=3)
+     # TODO: Add back when Flux supports outputing cell state
+     #out2 = IncompatibleProbe(newfrom(pp, lname, s -> outshape(l, s)))
+     outputused = falses(3)
+    # (OutputSelectProbe(out1, lname, outputused, 0),
+    #  OutputSelectProbe(out2, lname, outputused, 0))
+    OutputSelectProbe(out1, lname, outputused, 0)
+end
+
+# We are either trying to save a model which was imported, or someone has just used this to create an ONNX
+# compatible model. We need to fake another output so that this becomes the second output of the RNN
+# Note that this pretty much assumes full on that this is the next op after the RNN
+_onnx_rnn_output1(p::AbstractProbe) = select_output!(p, 1, "")
+function _onnx_rnn_output2(p::AbstractProbe) 
+    pnew = select_output!(p, 2, "_hidden", s -> s[1:3])
+    ndims(p) == 4 ? pnew : dropdims(pnew; dims=3)
+end
+
+_onnx_lstm_output1(h::AbstractProbe) = select_output!(h, 1, "")
+function _onnx_lstm_output2(h::AbstractProbe) 
+    psel = select_output!(h, 2, "_hidden", s -> s[1:3])
+    ndims(h) == 4 ? psel : dropdims(psel; dims=3)
+end
+_onnx_lstm_output3(::AbstractProbe) = throw(ArgumentError("LSTM output nr 3 (cell state) requires Flux.LSTM to output state. Please check you layer configuration!")) 
+
+_onnx_lstm_output1((h, c)::NTuple{2, AbstractProbe}) = select_output!(h, 1, "")
+function _onnx_lstm_output2((h, c)::NTuple{2, AbstractProbe}) 
+    psel = select_output!(h, 2, "_hidden", s -> s[1:3])
+    ndims(h) == 4 ? psel : dropdims(psel; dims=3)
+end
+function _onnx_lstm_output3((h, c)::NTuple{2, AbstractProbe}) 
+     psel = unwrap(select_output!(c, 3, "_cell", s -> s[1:3]), IncompatibleProbe)
+     ndims(h) == 4 ? psel : dropdims(psel; dims=3)
+end
 
 activation_attrib(l) = l.σ(ActivationAttributeProbe())
-activation_attrib(l::Flux.LSTMCell) = ONNX.AttributeProto[] #Only default values supported by Flux
+activation_attrib(::Flux.LSTMCell) = ONNX.AttributeProto[] #Only default values supported by Flux
 
 Base.tanh(::ActivationAttributeProbe) = rnnactattribs("Tanh")
 Flux.elu(::ActivationAttributeProbe, α=1f0) = rnnactattribs("Elu", α)

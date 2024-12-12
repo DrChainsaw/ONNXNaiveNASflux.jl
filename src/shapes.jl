@@ -60,6 +60,7 @@ shape(::Shape1D, outsize) = (outsize,)
 shape(::Flux2D, outsize) = (outsize, missing)
 shape(::FluxConvolutional{N}, outsize) where N = ((missing for _ in 1:N)..., outsize, missing)
 shape(::FluxRecurrent, outsize) = (outsize, missing, missing)
+shape(::FluxRecurrentCell, outsize) = (outsize, missing, missing)
 
 aggshape(f, d::Number...) = f(d...)
 aggshape(f, d...) = missing
@@ -76,23 +77,28 @@ end
 
 flipweights(l, w) = w
 flipweights(::FluxConvolutional{N}, w) where N = w[(size(w,i):-1:1 for i in 1:N)..., :, :]
-flipweights(::FluxRnn, w, hsize) = w
-function flipweights(::FluxLstm, w, hsize)
-    input = Flux.gate(w, hsize, 1)
-    forget = Flux.gate(w, hsize, 2)
-    cell = Flux.gate(w, hsize, 3)
-    output = Flux.gate(w, hsize, 4)
+flipweights(::FluxRnnCell, w, hsize) = w
+function flipweights(::FluxLstmCell, w, hsize)
+    input = lstm_gate(w, hsize, 1)
+    forget = lstm_gate(w, hsize, 2)
+    cell = lstm_gate(w, hsize, 3)
+    output = lstm_gate(w, hsize, 4)
     return vcat(input, output, forget, cell)
 end
 
-unflipweights(::FluxRnn, w, hsize) = w
-function unflipweights(::FluxLstm, w, hsize)
-    input = Flux.gate(w, hsize, 1)
-    output = Flux.gate(w, hsize, 2)
-    forget = Flux.gate(w, hsize, 3)
-    cell = Flux.gate(w, hsize, 4)
+unflipweights(::FluxRnnCell, w, hsize) = w
+function unflipweights(::FluxLstmCell, w, hsize)
+    input = lstm_gate(w, hsize, 1)
+    output = lstm_gate(w, hsize, 2)
+    forget = lstm_gate(w, hsize, 3)
+    cell = lstm_gate(w, hsize, 4)
     return vcat(input, forget, cell, output)
 end
+
+# Copied from https://github.com/FluxML/Flux.jl/blob/0567cb30a79e328a5077a6851ddbfe4db9b72d81/src/layers/recurrent.jl#L2C1-L4C54
+lstm_gate(h, n) = (1:h) .+ h*(n-1)
+lstm_gate(x::AbstractVector, h, n) = @view x[lstm_gate(h,n)]
+lstm_gate(x::AbstractMatrix, h, n) = view(x, lstm_gate(h,n), :)
 
 outshape(l, s) = outshape(layertype(l), l, s)
 outshape(::FluxParLayer, l, ::Missing) = outshape(l, shape(layertype(l), nin(l)[])) 
@@ -103,8 +109,8 @@ function outshape(::Flux2D, l, s::Tuple)
     assertsize(s[1], nin(l)[], l)
     return (nout(l), s[end])
 end
-function outshape(::FluxRecurrent, l, s::Tuple)
-    # l might be a cell and nin/nout in NaiveNASflux is only defined for Flux.Recur{cell}.
+outshape(::FluxRecurrent, l, s::Tuple) = outshape(l.cell, l, s)
+function outshape(::FluxRecurrentCell, l, s::Tuple)
     assertshape(s, (3, 4), l)
     assertsize(s[1], nin(l)[], l)
     # ONNX wants num directions as an extra dimension to output
