@@ -382,10 +382,12 @@ end
 # ONNX is the last time step of the hidden and the third output in ONNX is the last time step of the cell state
 function _returnvalue(::FluxLstmCell, l, pp, lname) 
      out1 = dropdims(newfrom(pp, lname, s -> outshape(l, s)); dims=3)
-     out2 = IncompatibleProbe(newfrom(pp, lname, s -> outshape(l, s)))
+     # TODO: Add back when Flux supports outputing cell state
+     #out2 = IncompatibleProbe(newfrom(pp, lname, s -> outshape(l, s)))
      outputused = falses(3)
-     (OutputSelectProbe(out1, lname, outputused, 0),
-      OutputSelectProbe(out2, lname, outputused, 0))
+    # (OutputSelectProbe(out1, lname, outputused, 0),
+    #  OutputSelectProbe(out2, lname, outputused, 0))
+    OutputSelectProbe(out1, lname, outputused, 0)
 end
 
 # We are either trying to save a model which was imported, or someone has just used this to create an ONNX
@@ -397,6 +399,12 @@ function _onnx_rnn_output2(p::AbstractProbe)
     ndims(p) == 4 ? pnew : dropdims(pnew; dims=3)
 end
 
+_onnx_lstm_output1(h::AbstractProbe) = select_output!(h, 1, "")
+function _onnx_lstm_output2(h::AbstractProbe) 
+    psel = select_output!(h, 2, "_hidden", s -> s[1:3])
+    ndims(h) == 4 ? psel : dropdims(psel; dims=3)
+end
+_onnx_lstm_output3(::AbstractProbe) = throw(ArgumentError("LSTM output nr 3 (cell state) requires Flux.LSTM to output state. Please check you layer configuration!")) 
 
 _onnx_lstm_output1((h, c)::NTuple{2, AbstractProbe}) = select_output!(h, 1, "")
 function _onnx_lstm_output2((h, c)::NTuple{2, AbstractProbe}) 

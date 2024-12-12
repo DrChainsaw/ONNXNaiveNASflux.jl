@@ -255,12 +255,17 @@ fluxrecurrentlayers[:LSTM] = function(params, Wi_WBi, Wh_WBh, Wb_Rb=default_Wb_R
         e == a
     end "Got unsupported activation function: $acts"
 
-    # b, h and c must all be of the same type when creating a cell, but
-    # it is actually Recur which has the state
+    # Should not be a problem when/if Flux adds this back as an optional output
+    @assert 3 ∉ params[ACTIVE_OUTPUTS_ATTRIBUTE_KEY] "LSTM output 3 (the cell state) not implemnented!" 
+
     cell = Flux.LSTMCell(Wi, Wh, b)
     return Flux.LSTM(cell)
 end
 fluxlayertypes[:LSTM] = (pars...) -> FluxLstm()
+
+_onnx_lstm_output1(h::AbstractArray) = h
+_onnx_lstm_output2(h::AbstractArray) = selectdim(h, 2, lastindex(h, 2))
+_onnx_lstm_output3(::AbstractArray) = throw(ArgumentError("LSTM output nr 3 (cell state) requires Flux.LSTM to output state. Please check you layer configuration!")) 
 
 _onnx_lstm_output1((h, c)::NTuple{2, AbstractArray}) = h
 _onnx_lstm_output2((h, c)::NTuple{2, AbstractArray}) = selectdim(h, 2, lastindex(h, 2))

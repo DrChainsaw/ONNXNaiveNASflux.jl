@@ -248,7 +248,7 @@
 
         @testset "$(tc.layer) node" for tc in (
             (layer=RNN(3 => 5, x -> Flux.elu(x, 0.1f0)), indata = reshape(collect(Float32, 1:24), :, 2, 4) .- 3),
-            (layer=LSTM(4 => 3), indata = reshape(collect(Float32, 1:24), 4, 2, :) .- 3, resultmap=first),
+            (layer=LSTM(4 => 3), indata = reshape(collect(Float32, 1:24), 4, 2, :) .- 3),
             )
             import ONNXNaiveNASflux.NaiveNASflux: hiddenweights
 
@@ -727,32 +727,18 @@
         end
 
         @testset "RNN to LSTM" begin
-            struct SelectHiddenOut{L} <: AbstractMutableComp
-                wrapped::L
-            end
-            NaiveNASflux.wrapped(l::SelectHiddenOut) = l.wrapped
-            (l::SelectHiddenOut)(x...) = first(l.wrapped(x...))
-
             v0 = rnninputvertex("input", 3)
             v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0)
-            v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1; layerfun=SelectHiddenOut)
+            v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1)
 
             test_named_graph(CompGraph(v0, v2); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
         end
 
         @testset "Recurrent to Dense" begin
-            # With Flux 0.15 we need something to select the first output from LSTM since it now outputs both the hidden
-            # and the cell state.
-            struct SelectHidden{L} <: AbstractMutableComp
-                wrapped::L
-            end
-            NaiveNASflux.wrapped(l::SelectHidden) = l.wrapped
-            (l::SelectHidden)((h, c)::Tuple) = l.wrapped(h)
-
             v0 = rnninputvertex("input", 3)
             v1 = fluxvertex("rnn", RNN(nout(v0) => 4), v0)
             v2 = fluxvertex("lstm", LSTM(nout(v1) => 5), v1)
-            v3 = dense("dense", v2, 2, elu; layerfun=SelectHidden)
+            v3 = dense("dense", v2, 2, elu)
 
             g_org = CompGraph(v0, v3)
             g_new = CompGraph(serdeser(graphproto(g_org)))
@@ -780,6 +766,7 @@
             # [seq_length, num_directions, batch_size, hidden_size] gets reversed to
             # [hidden_size, batch_size, num_directions, seq_length]
             # Need to swap batch_size and seq_length to match Flux output with added dim 3
+            # Maybe this is something ONNXNaiveNASflux needs to adjust for in order to support imported models...
             recurrent_swap_onnx(x::AbstractArray{T, 4}) where T = permutedims(x, (1, 4, 3, 2))
             recurrent_swap_onnx(x) = x
 
@@ -819,7 +806,9 @@
                 v0 = rnninputvertex("input", 3)
                 v1 = fluxvertex("lstm", LSTM(nout(v0) => 4), v0; layerfun=l -> OutputSelection(ntuple(_lstm_output_selection, 3), l))
 
-                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
+                @test_throws ArgumentError CompGraph(serdeser(graphproto(CompGraph(v0, v1))))
+                # Tested ok in Flux 0.15
+                #test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap, ortinputmap=recurrent_swap)
             end
 
             @testset "Select first and second with direction dim" begin
@@ -833,7 +822,9 @@
                 v0 = rnninputvertex("input", 3)
                 v1 = fluxvertex("lstm", LSTM(nout(v0) => 4), v0; layerfun=l -> AddSingletonDim(3, OutputSelection(ntuple(_lstm_output_selection, 3), l)))
 
-                test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap_onnx, ortinputmap=recurrent_swap)
+                @test_throws ArgumentError CompGraph(serdeser(graphproto(CompGraph(v0, v1))))
+                # Tested ok in Flux 0.15
+                # test_named_graph(CompGraph(v0, v1); timesteps=2, ortoutputmap=recurrent_swap_onnx, ortinputmap=recurrent_swap)
             end
         end
 
@@ -1204,7 +1195,7 @@
             (Dense(2 => 3), (2,0)),
             (Conv((1, 1), 2=>3), (0,0,2,0)), 
             (RNN(2 => 3), (2,0,0)), 
-            (OutputSelection(first, LSTM(2 => 3)), (2,0,0)), 
+            (LSTM(2 => 3), (2,0,0)), 
             (SkipConnection(Dense(2 => 2), +), (2,0)),
             ), cfun in (Chain, l -> Chain(BatchNorm(nin(l)[]), l))
 
