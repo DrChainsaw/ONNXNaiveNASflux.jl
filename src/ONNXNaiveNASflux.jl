@@ -34,6 +34,7 @@ include("deserialize/graphbuilder.jl")
 include("deserialize/combine.jl")
 include("deserialize/deserialize.jl")
 
+include("serialize/traceprobes.jl")
 include("serialize/namingutil.jl")
 include("serialize/serialize.jl")
 

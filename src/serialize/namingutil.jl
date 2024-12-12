@@ -169,3 +169,76 @@ function recursename(f, ctx::NamedNodeContext)
     res
 end
 
+"""
+    NameInterceptProbe <: WrappedProbe
+
+An AbstractProbe which is only used to intercept methods call above the primitive level to catch names (e.g. a `Chain` with a `NamedTuple` as layers).
+"""
+struct NameInterceptProbe{P<:AbstractProbe} <: WrappedProbe
+    wrapped::P
+end
+rewrap(::NameInterceptProbe, p) = NameInterceptProbe(p)
+
+inputprotoprobe!(gp, name, shape, namestrat::NamedNodeContext) = NameInterceptProbe(_inputprotoprobe!(gp, name, shape, namestrat))
+
+# This little dance is just to avoid ambiguities of (n::NamedNode)(pps...) since NamedNode is abstract
+# TODO: Generate with macro so we can add types to the union without worry? 
+(v::MutationVertex)(pps::AbstractProbe...) = _apply_probe_call(v, pps...)
+(n::NamedFunction)(pps::AbstractProbe...) = _apply_probe_call(n, pps...)
+
+# Some layers (e.g. LSTM) return multiple outputs
+# This design will probably not scale well when many layers output many differently sized tuples and some layers consume
+# the output from more than one such layer...
+(v::MutationVertex)(pps::NTuple{N, AbstractProbe}...) where N = _apply_probe_call(v, pps...)
+(n::NamedFunction)(pps::NTuple{N, AbstractProbe}...) where N = _apply_probe_call(n, pps...)
+
+_apply_probe_call(n::NamedNode, pps::AbstractProbe...) = __apply_probe_call(n, nextname(first(pps)), pps...)
+_apply_probe_call(n::NamedNode, pps::NTuple{N, AbstractProbe}...) where N = __apply_probe_call(n, nextname(first(first(pps))), pps...)
+
+# We are not in the business of catching names here, so just forward the call
+__apply_probe_call(n::NamedNode, ::Any, pps...) = base(n)(pps...)
+# We just want to rewrap probes in NameInterceptProbes for the sole reason that we might encounter other 
+# objects that we want to intercept names from (e.g. a Chain inside a Parallel)
+__apply_probe_call(n::NamedNode, ::NamedNodeContext, pps::AbstractProbe...) = _apply_probe_call(n, map(NameInterceptProbe, pps)...)
+__apply_probe_call(n::NamedNode, ::NamedNodeContext, pps::NTuple{N, AbstractProbe}...) where N = _apply_probe_call(n, map(ppps -> map(NameInterceptProbe, ppps), pps)...)
+
+
+function _apply_probe_call(n::NamedNode, pps::NameInterceptProbe...)
+    ppsname = map(pps) do pp
+        newnamestrat(pp, nextname(pp)(n))
+    end
+    ppout = base(n)(ppsname...)
+    return newnamestrat(ppout, nextname(pps[1]))
+end
+
+function _apply_probe_call(n::NamedNode, pps::NTuple{N, NameInterceptProbe}...) where N
+    ppsname = map(pps) do pp
+        map(p -> newnamestrat(p, nextname(p)(n)), pp)
+    end
+    ppout = base(n)(ppsname...)
+    return newnamestrat(ppout, nextname(first(first(pps))))
+end
+
+newnamestrat(t::NTuple{N, AbstractProbe}, nextname) where N = ntuple(i -> newnamestrat(t[i], nextname), N) 
+
+# Here we wrap all callable children in a NamedFunction so that we can access the name when the child is called
+(c::Chain)(pp::NameInterceptProbe) = _instrument_named_functor(c; addbasename=false)(unwrap(pp))
+(p::Parallel)(pp::NameInterceptProbe) = _instrument_named_functor(p; addbasename=false)(unwrap(pp))
+(p::SkipConnection)(pp::NameInterceptProbe) = _instrument_named_functor(p; addbasename=false)(unwrap(pp))
+
+# The exclude is to ensure that we only see the fields of w, not the fields of its children
+_instrument_named_functor(w; addbasename=true) = Functors.fmap_with_path(w; exclude = (k,c) -> c != w) do keypath, child
+    _instrument_named_child(child, string(only(keypath)); addbasename)
+end
+
+_instrument_named_child(child, name; kwargs...) = !isempty(methods(child)) ? NamedFunction(child, name) : child
+_instrument_named_child(child::Tuple, name; addbasename) = ntuple(length(child)) do i
+    _instrument_named_child(child[i], string(addbasename ? name : "", '[', i, ']'))
+end
+_instrument_named_child(child::AbstractArray, name; addbasename) = map(enumerate(child)) do (i, elem)
+    _instrument_named_child(elem, string(addbasename ? name : "", '[', i, ']'))
+end
+_instrument_named_child(child::NamedTuple{K}, name; addbasename) where K = ntuple(length(child)) do i
+    _instrument_named_child(child[i], string(addbasename ? string(name, '.') : "", K[i]))
+end |> NamedTuple{K}
+
