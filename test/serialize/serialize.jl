@@ -1294,7 +1294,6 @@
             @testset "Inputshape $s" for s in testsizes
                 assertwarn = s isa Tuple && length(s) != length(shape(layertype(op), 1))
                 g = remodel(op, s; assertwarn)
-                Flux.reset!(op) # For RNNs or else the test below will fail
                 @test g(inpt) == op(inpt)
             end
         end
