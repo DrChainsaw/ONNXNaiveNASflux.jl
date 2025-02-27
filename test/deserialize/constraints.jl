@@ -27,7 +27,7 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,3)
@@ -46,7 +46,7 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
  
             @test nout.(vertices(g)) == [3, 6, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
@@ -67,7 +67,7 @@
 
             # note that this works only because MeasureNout got the size when we evaluated the graph absorbvertex
             # In other cases one might need try_infer_sizes!
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
@@ -88,7 +88,7 @@
           
             # note that this works only because MeasureNout got the size when we evaluated the graph absorbvertex
             # In other cases one might need try_infer_sizes!
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 30, 3, 4]
             @test size(g(ones(Float32, 3, 2))) == (2,5,4,2)
@@ -107,7 +107,7 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
-            @test @test_logs((:warn, r"Could not change nout"), match_mode=:any, Δnout!(v1, 3)) == false
+            @test @test_logs((:warn, r"Could not change nout"), match_mode=:any, Δnout!(Returns(1), v1, 3)) == false
 
             @test nout.(vertices(g)) == [3, 4, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
@@ -126,7 +126,7 @@
 
             @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 6, 6, 4]
             @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
@@ -145,7 +145,7 @@
 
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 8, 10, 4]
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
@@ -164,7 +164,7 @@
 
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 16, 20, 4]
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
