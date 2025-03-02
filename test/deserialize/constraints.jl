@@ -11,6 +11,7 @@
 
     @testset "Reshape" begin
         using ONNXNaiveNASflux: Reshape    
+        using ONNXNaiveNASflux.NaiveNASlib.Advanced
 
         rv(name, invertex, dims) = absorbvertex(name, MeasureNout(Reshape(dims)), invertex; traitdecoration=SizePseudoTransparent)
 
@@ -123,17 +124,16 @@
             @test layer(v2) isa Reshape
 
             g = CompGraph(v0, v3)
+            startsizes = nout.(vertices(g))
 
             @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
+            # Must change by an even number, so this can't work
+            @test !Δsize!(Returns(1), ΔNoutExact(v1 => 3; fallback = ΔSizeFailNoOp()))
+            @test Δnout!(v1, 2)
 
-            if Sys.isapple()
-                # 6 and 8 have same distance to 7, so I guess this is also an allowed output :(
-                @test nout.(vertices(g)) == [3, 8, 8, 4]
-            else
-                @test nout.(vertices(g)) == [3, 6, 6, 4]
-            end
+            @test nout.(vertices(g)) == [3, 6, 6, 4]
+
             @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
         end
 
