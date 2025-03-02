@@ -11,6 +11,7 @@
 
     @testset "Reshape" begin
         using ONNXNaiveNASflux: Reshape    
+        using ONNXNaiveNASflux.NaiveNASlib.Advanced
 
         rv(name, invertex, dims) = absorbvertex(name, MeasureNout(Reshape(dims)), invertex; traitdecoration=SizePseudoTransparent)
 
@@ -27,7 +28,7 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,3)
@@ -46,7 +47,7 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
  
             @test nout.(vertices(g)) == [3, 6, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
@@ -67,7 +68,7 @@
 
             # note that this works only because MeasureNout got the size when we evaluated the graph absorbvertex
             # In other cases one might need try_infer_sizes!
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 6, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,3,4,2)
@@ -88,7 +89,7 @@
           
             # note that this works only because MeasureNout got the size when we evaluated the graph absorbvertex
             # In other cases one might need try_infer_sizes!
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 30, 3, 4]
             @test size(g(ones(Float32, 3, 2))) == (2,5,4,2)
@@ -107,7 +108,7 @@
 
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
 
-            @test @test_logs((:warn, r"Could not change nout"), match_mode=:any, Δnout!(v1, 3)) == false
+            @test @test_logs((:warn, r"Could not change nout"), match_mode=:any, Δnout!(Returns(1), v1, 3)) == false
 
             @test nout.(vertices(g)) == [3, 4, 3, 4]
             @test size(g(ones(Float32, 3, 15))) == (5,2,4,2)
@@ -123,12 +124,16 @@
             @test layer(v2) isa Reshape
 
             g = CompGraph(v0, v3)
+            startsizes = nout.(vertices(g))
 
             @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            # Must change by an even number, so this can't work
+            @test !Δsize!(Returns(1), ΔNoutExact(v1 => 3; fallback = ΔSizeFailNoOp()))
+            @test Δnout!(v1, 2)
 
             @test nout.(vertices(g)) == [3, 6, 6, 4]
+
             @test size(g(ones(Float32, 3, 20))) == (5,2,4,2)
         end
 
@@ -145,7 +150,7 @@
 
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 8, 10, 4]
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
@@ -164,7 +169,7 @@
 
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
 
-            @test_logs (:warn, r"Could not change nout") Δnout!(v1, 3)
+            @test_logs (:warn, r"Could not change nout") Δnout!(Returns(1), v1, 3)
 
             @test nout.(vertices(g)) == [3, 16, 20, 4]
             @test size(g(ones(Float32, 5,2,3,2))) == (4, 16)
